@@ -1,0 +1,42 @@
+services:
+  frontend:
+    build:
+      context: .
+    container_name: waxci-web-frontend
+    env_file:
+      - .env
+    ports:
+      - '3006:3000'
+      - '5555:5555'
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - waxci-network
+
+  backend:
+    image: bibocomdigital/waxci-backend-iso-prod:latest
+    env_file:
+      - .env.backend
+    ports:
+      - '3005:3000'
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - waxci-network
+
+  redis:
+    image: redis:7
+    container_name: redisBibo
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    networks:
+      - waxci-network
+
+networks:
+  waxci-network:
+    driver: bridge
