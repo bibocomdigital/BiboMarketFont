@@ -13,7 +13,7 @@ jobs:
     environment: iso_prod
 
     env:
-      APP_NAME: nextjs-app
+      APP_NAME: waxci-web-frontend-iso-prod
       NODE_ENV: production
 
     steps:
@@ -25,36 +25,46 @@ jobs:
 
       - name: Build Docker image localement
         run: |
-          docker build -t ${{ env.APP_NAME }}:test .
+          docker build --target prod -t ${{ env.APP_NAME }}:test .
 
       - name: Run container for healthcheck
         run: |
-          docker run -d --name temp-app -p 3000:3000 nest-app:test
+          docker run -d --name temp-app -p 3000:3000 ${{ env.APP_NAME }}:test
 
+          ready=false
           for i in {1..20}; do
-            if curl -f http://localhost:3000/health; then
+            if curl -fsS http://localhost:3000/ > /dev/null; then
               echo "Application prête"
+              ready=true
               break
             fi
             sleep 3
           done
 
           docker logs temp-app
+
+          if [ "$ready" != "true" ]; then
+            docker stop temp-app
+            docker rm temp-app
+            exit 1
+          fi
+
           docker stop temp-app
           docker rm temp-app
-          
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+          username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build & push Docker images
         uses: docker/build-push-action@v5
         with:
           context: .
+          target: prod
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.APP_NAME }}:latest
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ github.sha }}
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ github.ref_name }}
+            ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:latest
+            ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ github.sha }}
+            ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ github.ref_name }}
