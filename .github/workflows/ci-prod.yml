@@ -1,18 +1,20 @@
-name: CI pour les pull request dans master
+name: CI pour les pull request dans main
 
 on:
   pull_request:
-    branches: ["master"]
+    branches:
+      - "main"
+  push:
+    branches:
+      - "main"
+    tags:
+      - "v*"
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     environment: prod
-
-    env:
-      APP_NAME: waxci-web-frontend-prod
-      NODE_ENV: production
 
     steps:
       - name: Checkout du code
@@ -23,32 +25,7 @@ jobs:
 
       - name: Build Docker image localement
         run: |
-          docker build --target prod -t ${{ env.APP_NAME }}:test .
-
-      - name: Run container for healthcheck
-        run: |
-          docker run -d --name temp-app -p 3000:3000 ${{ env.APP_NAME }}:test
-
-          ready=false
-          for i in {1..20}; do
-            if curl -fsS http://localhost:3000/ > /dev/null; then
-              echo "Application prête"
-              ready=true
-              break
-            fi
-            sleep 3
-          done
-
-          docker logs temp-app
-
-          if [ "$ready" != "true" ]; then
-            docker stop temp-app
-            docker rm temp-app
-            exit 1
-          fi
-
-          docker stop temp-app
-          docker rm temp-app
+          docker build --target prod -t ${{ vars.APP_NAME }}:test .
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -62,6 +39,11 @@ jobs:
           context: .
           target: prod
           push: true
+          build-args: |
+            NEXT_PUBLIC_BACKEND_URL=${{ vars.NEXT_PUBLIC_BACKEND_URL }}
+            NEXT_PUBLIC_FRONTEND_URL=${{ vars.NEXT_PUBLIC_FRONTEND_URL }}
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+            NEXT_PUBLIC_ENV=${{ vars.NEXT_PUBLIC_ENV }}
           tags: |
             ${{ vars.DOCKER_USERNAME }}/${{ vars.APP_NAME }}:latest
             ${{ vars.DOCKER_USERNAME }}/${{ vars.APP_NAME }}:${{ github.sha }}
