@@ -13,7 +13,7 @@ jobs:
     environment: develop
 
     env:
-      APP_NAME: e-learning-frontend-develop
+      APP_NAME: bibomarket-frontend-develop
       NODE_ENV: production
 
     steps:
@@ -45,6 +45,6 @@ jobs:
             NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
             NEXT_PUBLIC_ENV=${{ vars.NEXT_PUBLIC_ENV }}
           tags: |
-            ${{ vars.DOCKER_USERNAME }}/${{ vars.APP_NAME }}:latest
-            ${{ vars.DOCKER_USERNAME }}/${{ vars.APP_NAME }}:${{ github.sha }}
-            ${{ vars.DOCKER_USERNAME }}/${{ vars.APP_NAME }}:${{ github.ref_name }}
+            ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:latest
+            ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ github.sha }}
+            ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ github.ref_name }}

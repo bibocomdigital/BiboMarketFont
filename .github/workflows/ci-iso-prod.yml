@@ -13,7 +13,7 @@ jobs:
     environment: iso_prod
 
     env:
-      APP_NAME: e-learning-frontend-iso-prod
+      APP_NAME: bibomarket-frontend-iso-prod
       NODE_ENV: production
 
     steps:
