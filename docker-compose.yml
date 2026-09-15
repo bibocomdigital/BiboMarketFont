@@ -71,8 +71,25 @@ services:
   #   networks:
   #     - bibomarket-network
 
+  postgres:
+    image: postgres:17
+    container_name: postgres-bibomarket-backend
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    networks:
+      - bibomarket-network
+    environment:
+      - POSTGRES_USER=bibomarket
+      - POSTGRES_PASSWORD=bibopassword
+      - POSTGRES_DB=biboMarket
+    volumes:
+      - postgres_data_market:/var/lib/postgresql/data
+
+  # Create a volume for the postgres data
 volumes:
-  bibomarket_postgres_data:
+  postgres_data_market:
+    driver: local
 
 networks:
   bibomarket-network:
