@@ -221,7 +221,7 @@ export const verifyCode = async (email: string, verificationCode: string): Promi
     console.log('🔄 [API] Début de la vérification du code');
     console.log('📧 [API] Email:', email);
     console.log('🔑 [API] Code de vérification:', verificationCode);
-    console.log('📤 [API] URL de vérification:', `${API_URL}/api/auth/verify`);
+    console.log('📤 [API] URL de vérification:', `${API_URL}/auth/verify`);
     
     // Préparer le body de la requête
     const body = JSON.stringify({ email, verificationCode });
@@ -277,7 +277,7 @@ export const resendVerificationCode = async (email: string): Promise<{
   try {
     console.log('🔄 [API] Demande de renvoi de code de vérification');
     console.log('📧 [API] Email:', email);
-    console.log('📤 [API] URL de renvoi de code:', `${API_URL}/api/auth/resend-code`);
+    console.log('📤 [API] URL de renvoi de code:', `${API_URL}/auth/resend-code`);
     
     const response = await fetch(`${API_URL}/auth/resend-code`, {
       method: 'POST',
@@ -325,7 +325,7 @@ export const login = async (credentials: { email?: string; password: string, pho
     console.log('🔄 [API] Tentative de connexion pour:', credentials.email);
     
     // Désactivation du mode simulation - toujours utiliser l'API réelle
-    console.log('📤 [API] URL de connexion:', `${API_URL}/api/auth/login`);
+    console.log('📤 [API] URL de connexion:', `${API_URL}/auth/login`);
     console.log('📤 [API] Données envoyées:', { email: credentials.email, password: '********', phoneNumber: credentials.phoneNumber });
 
     

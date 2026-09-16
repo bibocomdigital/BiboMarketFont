@@ -134,7 +134,7 @@ export const addComment = async (productId: number, commentData: NewComment): Pr
     }
     
     // Appeler l'API pour ajouter le commentaire
-    const response = await fetch(`${backendUrl}/api/products/${productId}/comments`, {
+    const response = await fetch(`${backendUrl}/products/${productId}/comments`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(commentData)
@@ -186,7 +186,7 @@ export const getProductComments = async (productId: number, page: number = 1, li
     console.log('📄 [COMMENTS] Page:', page, '- Limite:', limit);
     
     // Appeler l'API pour récupérer les commentaires avec pagination
-    const response = await fetch(`${backendUrl}/api/products/${productId}/comments?page=${page}&limit=${limit}`);
+    const response = await fetch(`${backendUrl}/products/${productId}/comments?page=${page}&limit=${limit}`);
     
     console.log('📊 [COMMENTS] Statut de la réponse de récupération:', response.status);
     
@@ -248,7 +248,7 @@ export const replyToComment = async (commentId: number, replyData: NewReply): Pr
     }
     
     // Appeler l'API pour ajouter la réponse
-    const response = await fetch(`${backendUrl}/api/comments/${commentId}/replies`, {
+    const response = await fetch(`${backendUrl}/comments/${commentId}/replies`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(replyData)
@@ -305,7 +305,7 @@ export const updateComment = async (commentId: number, commentData: NewComment):
     }
     
     // Appeler l'API pour mettre à jour le commentaire
-    const response = await fetch(`${backendUrl}/api/comments/${commentId}`, {
+    const response = await fetch(`${backendUrl}/comments/${commentId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(commentData)
@@ -359,7 +359,7 @@ export const deleteComment = async (commentId: number): Promise<DeleteResponse> 
     }
     
     // Appeler l'API pour supprimer le commentaire
-    const response = await fetch(`${backendUrl}/api/comments/${commentId}`, {
+    const response = await fetch(`${backendUrl}/comments/${commentId}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -412,7 +412,7 @@ export const deleteReply = async (replyId: number): Promise<DeleteResponse> => {
     }
     
     // Appeler l'API pour supprimer la réponse
-    const response = await fetch(`${backendUrl}/api/replies/${replyId}`, {
+    const response = await fetch(`${backendUrl}/replies/${replyId}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });

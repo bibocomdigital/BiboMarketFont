@@ -38,18 +38,25 @@ const Index = () => {
       const target = e.target as HTMLElement;
       const anchorLink = target.closest('a[href^="#"]');
       
-      if (anchorLink) {
+      if (!anchorLink) return;
+
+      const targetId = (anchorLink.getAttribute('href') || '').trim();
+      if (targetId.length <= 1) {
         e.preventDefault();
-        const targetId = anchorLink.getAttribute('href');
-        if (targetId) {
-          const targetElement = document.querySelector(targetId);
-          if (targetElement) {
-            window.scrollTo({
-              top: targetElement.getBoundingClientRect().top + window.scrollY - 100,
-              behavior: 'smooth',
-            });
-          }
+        return;
+      }
+
+      e.preventDefault();
+      try {
+        const targetElement = document.querySelector(targetId);
+        if (targetElement) {
+          window.scrollTo({
+            top: targetElement.getBoundingClientRect().top + window.scrollY - 100,
+            behavior: 'smooth',
+          });
         }
+      } catch {
+        // href="#..." invalide : on n'essaie pas le scroll
       }
     };
 

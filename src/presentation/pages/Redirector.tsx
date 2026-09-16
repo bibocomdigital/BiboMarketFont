@@ -73,7 +73,7 @@ const Redirector = () => {
       
       // Redirect to the API to finalize authentication
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-      const redirectUrl = `${backendUrl}/api/auth/google/callback?code=${code}&scope=${scope}`;
+      const redirectUrl = `${backendUrl}/auth/google/callback?code=${code}&scope=${scope}`;
       
       console.log('🔄 Redirecting to backend:', redirectUrl);
       

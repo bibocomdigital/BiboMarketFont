@@ -3,7 +3,9 @@
  */
 
 // Importer les fonctions du service de configuration
-import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { backendUrl, getAuthToken } from './configService';
+import { parseApiError } from '../api/fetch-error';
+import { unwrapApi, unwrapList, unwrapPaged, unwrapRecord } from '../api/api-envelope';
 
 // Définition des constantes pour les rôles utilisateur
 export enum UserRole {
@@ -123,7 +125,6 @@ export const isAuthenticated = (): boolean => {
     const userStr = localStorage.getItem('user');
     
     if (!token || !userStr) {
-      console.error('❌ [PRODUCT] Aucun utilisateur connecté');
       return false;
     }
     
@@ -179,17 +180,16 @@ export const getAllProducts = async (
     const response = await fetch(url);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des produits:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des produits');
+      throw await parseApiError(response, 'Erreur lors de la récupération des produits');
     }
     
     const data = await response.json();
-    console.log('✅ [PRODUCT] Produits récupérés avec succès:', data.products.length);
+    const { items, pagination } = unwrapPaged<Product>(data, 'products', { page, limit });
+    console.log('✅ [PRODUCT] Produits récupérés avec succès:', items.length);
     
     return {
-      products: data.products,
-      pagination: data.pagination
+      products: items,
+      pagination,
     };
   } catch (error) {
     console.error('❌ [PRODUCT] Erreur:', error);
@@ -209,13 +209,13 @@ export const getProductById = async (productId: number): Promise<Product> => {
     const response = await fetch(`${backendUrl}/produit/${productId}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération du produit:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération du produit');
+      throw await parseApiError(response, 'Erreur lors de la récupération du produit');
     }
     
-    const product = await response.json();
-    console.log('✅ [PRODUCT] Produit récupéré avec succès:', product.name);
+    const payload = unwrapApi(await response.json());
+    const record = unwrapRecord(payload);
+    const product = (record.product ?? payload) as Product;
+    console.log('✅ [PRODUCT] Produit récupéré avec succès:', product?.name);
     
     return product;
   } catch (error) {
@@ -264,9 +264,7 @@ export const createProduct = async (productData: FormData): Promise<Product> => 
     console.log('🔄 [PRODUCT] Statut de la réponse:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la création du produit:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la création du produit');
+      throw await parseApiError(response, 'Erreur lors de la création du produit');
     }
     
     const data = await response.json();
@@ -311,9 +309,7 @@ export const updateProduct = async (productId: number, productData: FormData): P
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la mise à jour du produit:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la mise à jour du produit');
+      throw await parseApiError(response, 'Erreur lors de la mise à jour du produit');
     }
     
     const data = await response.json();
@@ -358,9 +354,7 @@ export const updateProductStock = async (productId: number, newStock: number): P
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la mise à jour du stock:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la mise à jour du stock');
+      throw await parseApiError(response, 'Erreur lors de la mise à jour du stock');
     }
     
     const data = await response.json();
@@ -403,9 +397,7 @@ export const deleteProduct = async (productId: number): Promise<void> => {
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la suppression du produit:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la suppression du produit');
+      throw await parseApiError(response, 'Erreur lors de la suppression du produit');
     }
     
     console.log('✅ [PRODUCT] Produit supprimé avec succès');
@@ -448,17 +440,16 @@ export const searchProducts = async (
     const response = await fetch(url);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la recherche de produits:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la recherche de produits');
+      throw await parseApiError(response, 'Erreur lors de la recherche de produits');
     }
     
     const data = await response.json();
-    console.log('✅ [PRODUCT] Recherche réussie, produits trouvés:', data.products.length);
+    const { items, pagination } = unwrapPaged<Product>(data, 'products', { page, limit });
+    console.log('✅ [PRODUCT] Recherche réussie, produits trouvés:', items.length);
     
     return {
-      products: data.products,
-      pagination: data.pagination
+      products: items,
+      pagination,
     };
   } catch (error) {
     console.error('❌ [PRODUCT] Erreur:', error);
@@ -485,17 +476,16 @@ export const getProductsByCategory = async (
     const response = await fetch(`${backendUrl}/produit/category/${encodeURIComponent(category)}?page=${page}&limit=${limit}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des produits par catégorie:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des produits par catégorie');
+      throw await parseApiError(response, 'Erreur lors de la récupération des produits par catégorie');
     }
     
     const data = await response.json();
-    console.log('✅ [PRODUCT] Produits de la catégorie récupérés avec succès:', data.products.length);
+    const { items, pagination } = unwrapPaged<Product>(data, 'products', { page, limit });
+    console.log('✅ [PRODUCT] Produits de la catégorie récupérés avec succès:', items.length);
     
     return {
-      products: data.products,
-      pagination: data.pagination
+      products: items,
+      pagination,
     };
   } catch (error) {
     console.error('❌ [PRODUCT] Erreur:', error);
@@ -516,12 +506,10 @@ export const getLatestProducts = async (limit: number = 10): Promise<Product[]> 
     const response = await fetch(`${backendUrl}/produit/latest?limit=${limit}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des derniers produits:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des derniers produits');
+      throw await parseApiError(response, 'Erreur lors de la récupération des derniers produits');
     }
     
-    const products = await response.json();
+    const products = unwrapList(await response.json(), ['products']) as Product[];
     console.log('✅ [PRODUCT] Derniers produits récupérés avec succès:', products.length);
     
     return products;
@@ -544,12 +532,10 @@ export const getFeaturedProducts = async (limit: number = 10): Promise<Product[]
     const response = await fetch(`${backendUrl}/produit/featured?limit=${limit}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des produits en vedette:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des produits en vedette');
+      throw await parseApiError(response, 'Erreur lors de la récupération des produits en vedette');
     }
     
-    const products = await response.json();
+    const products = unwrapList(await response.json(), ['products']) as Product[];
     console.log('✅ [PRODUCT] Produits en vedette récupérés avec succès:', products.length);
     
     return products;
@@ -571,12 +557,10 @@ export const getProductCategories = async (): Promise<string[]> => {
     const response = await fetch(`${backendUrl}/produit/categories`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des catégories:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des catégories');
+      throw await parseApiError(response, 'Erreur lors de la récupération des catégories');
     }
     
-    const categories = await response.json();
+    const categories = unwrapList(await response.json(), ['categories']) as string[];
     console.log('✅ [PRODUCT] Catégories récupérées avec succès:', categories.length);
     
     return categories;
@@ -605,17 +589,16 @@ export const getMerchantProducts = async (
     const response = await fetch(`${backendUrl}/produit/merchant/${merchantId}?page=${page}&limit=${limit}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des produits du commerçant:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des produits du commerçant');
+      throw await parseApiError(response, 'Erreur lors de la récupération des produits du commerçant');
     }
     
     const data = await response.json();
-    console.log('✅ [PRODUCT] Produits du commerçant récupérés avec succès:', data.products.length);
+    const { items, pagination } = unwrapPaged<Product>(data, 'products', { page, limit });
+    console.log('✅ [PRODUCT] Produits du commerçant récupérés avec succès:', items.length);
     
     return {
-      products: data.products,
-      pagination: data.pagination
+      products: items,
+      pagination,
     };
   } catch (error) {
     console.error('❌ [PRODUCT] Erreur:', error);
@@ -637,12 +620,10 @@ export const getRelatedProducts = async (productId: number, limit: number = 5): 
     const response = await fetch(`${backendUrl}/produit/${productId}/related?limit=${limit}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des produits associés:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des produits associés');
+      throw await parseApiError(response, 'Erreur lors de la récupération des produits associés');
     }
     
-    const relatedProducts = await response.json();
+    const relatedProducts = unwrapList(await response.json(), ['products']) as Product[];
     console.log('✅ [PRODUCT] Produits associés récupérés avec succès:', relatedProducts.length);
     
     return relatedProducts;
@@ -685,12 +666,14 @@ export const getProductStats = async (): Promise<{
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la récupération des statistiques:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des statistiques');
+      throw await parseApiError(response, 'Erreur lors de la récupération des statistiques');
     }
     
-    const stats = await response.json();
+    const stats = unwrapRecord(await response.json()) as {
+      totalProducts: number;
+      lowStockCount: number;
+      categoryStats: {category: string; count: number}[];
+    };
     console.log('✅ [PRODUCT] Statistiques récupérées avec succès');
     
     return stats;
@@ -735,15 +718,14 @@ export const updateProductStatus = async (
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [PRODUCT] Erreur lors de la mise à jour du statut:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la mise à jour du statut');
+      throw await parseApiError(response, 'Erreur lors de la mise à jour du statut');
     }
     
-    const data = await response.json();
-    console.log('✅ [PRODUCT] Statut mis à jour avec succès:', data.product.status);
+    const data = unwrapRecord(await response.json());
+    const product = (data.product ?? data) as Product;
+    console.log('✅ [PRODUCT] Statut mis à jour avec succès:', product.status);
     
-    return data.product;
+    return product;
   } catch (error) {
     console.error('❌ [PRODUCT] Erreur:', error);
     throw error;

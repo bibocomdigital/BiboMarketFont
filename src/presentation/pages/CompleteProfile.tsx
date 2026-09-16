@@ -86,7 +86,7 @@ const CompleteProfile = () => {
     try {
       // API URL to get profile data
       const profileUrl = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/profile`
+        ? `${process.env.NEXT_PUBLIC_API_URL}/auth/profile`
         : 'http://localhost:3000/api/auth/profile';
       
       console.log('🔍 [COMPLETE_PROFILE] Trying to retrieve profile from:', profileUrl);
@@ -151,7 +151,7 @@ const CompleteProfile = () => {
     try {
       // API URL to update profile
       const updateProfileUrl = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/profile`
+        ? `${process.env.NEXT_PUBLIC_API_URL}/auth/profile`
         : 'http://localhost:3000/api/auth/profile';
       
       console.log('🔄 [COMPLETE_PROFILE] Sending profile update to:', updateProfileUrl);
