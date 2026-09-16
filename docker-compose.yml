@@ -44,8 +44,13 @@ services:
       - POSTGRES_DB=biboMarket
     volumes:
       - postgres_data_market:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bibomarket -d biboMarket']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
-  # Create a volume for the postgres data
 volumes:
   postgres_data_market:
     driver: local

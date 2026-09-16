@@ -4,6 +4,7 @@
 
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { unwrapList, unwrapRecord } from '../api/api-envelope';
 
 // Définition des constantes pour les rôles utilisateur
 export enum UserRole {
@@ -52,6 +53,18 @@ export interface Shop {
 
 export interface ShopWithProducts extends Shop {
   products: ShopProduct[];
+}
+
+function mapShopWithProducts(raw: unknown): ShopWithProducts {
+  const payload = unwrapRecord(raw);
+  const shop = (payload.shop ?? payload) as Shop;
+  const products = Array.isArray(payload.products) ? (payload.products as ShopProduct[]) : [];
+  return { ...shop, products };
+}
+
+function unwrapShopEntity(raw: unknown): Shop {
+  const payload = unwrapRecord(raw);
+  return (payload.shop ?? payload) as Shop;
 }
 
 export interface MerchantDetails {
@@ -175,12 +188,10 @@ export const getMyShop = async (): Promise<ShopWithProducts> => {
       throw new Error(errorMessage);
     }
     
-    console.log('✅ [SHOP] Boutique récupérée avec succès:', data.shop.name);
+    const shop = mapShopWithProducts(data);
+    console.log('✅ [SHOP] Boutique récupérée avec succès:', shop.name);
     
-    return {
-      ...data.shop,
-      products: data.products || []
-    };
+    return shop;
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);
     throw error;
@@ -272,9 +283,10 @@ export const createShop = async (shopData: FormData): Promise<Shop> => {
       throw new Error(message);
     }
     
-    console.log('✅ [SHOP] Boutique créée avec succès:', data.shop.name);
+    const shop = unwrapShopEntity(data);
+    console.log('✅ [SHOP] Boutique créée avec succès:', shop.name);
     
-    return data.shop;
+    return shop;
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);
     throw error;
@@ -327,10 +339,11 @@ export const updateShop = async (shopId: number, shopData: FormData): Promise<Sh
         : rawMessage || 'Erreur lors de la mise à jour de la boutique';
       throw new Error(message);
     }
+
+    const shop = unwrapShopEntity(data);
+    console.log('✅ [SHOP] Boutique mise à jour avec succès:', shop.name);
     
-    console.log('✅ [SHOP] Boutique mise à jour avec succès:', data.shop.name);
-    
-    return data.shop;
+    return shop;
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);
     throw error;
@@ -355,12 +368,10 @@ export const getShopById = async (shopId: number): Promise<ShopWithProducts> => 
     }
     
     const data = await response.json();
-    console.log('✅ [SHOP] Boutique récupérée avec succès:', data.shop.name);
+    const shop = mapShopWithProducts(data);
+    console.log('✅ [SHOP] Boutique récupérée avec succès:', shop.name);
     
-    return {
-      ...data.shop,
-      products: data.products || []
-    };
+    return shop;
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);
     throw error;
@@ -385,9 +396,10 @@ export const getShopProducts = async (shopId: number): Promise<ShopProduct[]> =>
     }
     
     const data = await response.json();
-    console.log('✅ [SHOP] Produits récupérés avec succès:', data.products.length);
+    const products = unwrapList(data, ['products']) as ShopProduct[];
+    console.log('✅ [SHOP] Produits récupérés avec succès:', products.length);
     
-    return data.products;
+    return products;
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);
     throw error;
@@ -411,9 +423,10 @@ export const getAllShops = async (): Promise<Shop[]> => {
     }
     
     const data = await response.json();
-    console.log('✅ [SHOP] Boutiques récupérées avec succès:', data.shops.length);
+    const shops = unwrapList(data, ['shops']) as Shop[];
+    console.log('✅ [SHOP] Boutiques récupérées avec succès:', shops.length);
     
-    return data.shops;
+    return shops;
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);
     throw error;
@@ -475,13 +488,14 @@ export const getShopWithMerchantDetails = async (shopId: number): Promise<ShopWi
       throw new Error(errorData.message || 'Erreur lors de la récupération des détails de la boutique');
     }
     
-    const data = await response.json();
-    console.log('✅ [SHOP] Détails de la boutique récupérés avec succès:', data.shop?.name);
-    
+    const payload = unwrapRecord(await response.json());
+    const shop = (payload.shop ?? payload) as ShopWithDetails;
+    console.log('✅ [SHOP] Détails de la boutique récupérés avec succès:', shop?.name);
+
     return {
-      ...data.shop,
-      owner: data.shop.owner,
-      merchantStats: data.merchantStats
+      ...shop,
+      owner: shop?.owner,
+      merchantStats: (payload.merchantStats ?? shop?.merchantStats) as ShopWithDetails['merchantStats'],
     };
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);
@@ -529,13 +543,13 @@ export const contactMerchant = async (
       throw new Error(errorData.message || 'Erreur lors de l\'envoi du message');
     }
     
-    const data = await response.json();
+    const payload = unwrapRecord(await response.json());
     console.log('✅ [SHOP] Message envoyé avec succès');
     
     return {
-      success: data.success,
-      message: data.message,
-      contact: data.contact
+      success: payload.success !== false,
+      message: String(payload.message ?? 'Message envoyé'),
+      contact: payload.contact as { id: number; createdAt: string } | undefined,
     };
   } catch (error) {
     console.error('❌ [SHOP] Erreur:', error);

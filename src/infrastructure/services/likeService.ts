@@ -4,6 +4,7 @@
 
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { unwrapList } from '../api/api-envelope';
 
 // Types pour les likes et réactions
 export enum ReactionType {
@@ -234,10 +235,7 @@ export const getProductLikesCount = async (productId: number): Promise<LikesCoun
       };
     }
     
-    const data = await response.json();
-    
-    // Adapter la structure de l'API à celle attendue par le frontend
-    const likes = data.likes || [];
+    const likes = unwrapList(await response.json(), ['likes']);
     
     // Compter les likes et dislikes
     const likesCount = likes.filter((like: any) => like.type === 'LIKE').length;

@@ -29,14 +29,12 @@ const isUserLoggedIn = (): boolean => {
     // Vérifier si l'utilisateur est connecté
     const userStr = localStorage.getItem('user');
     if (!userStr) {
-      console.error('❌ [LIKES] Aucun utilisateur connecté');
       return false;
     }
     
     // Vérifier si le token existe
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error('❌ [LIKES] Token non trouvé');
       return false;
     }
     
@@ -48,15 +46,12 @@ const isUserLoggedIn = (): boolean => {
       const expirationTime = payload.exp * 1000; // convertir en millisecondes
       
       if (Date.now() >= expirationTime) {
-        console.error('❌ [LIKES] Token expiré');
         return false;
       }
     } catch (err) {
-      console.error('❌ [LIKES] Erreur lors de la validation du token:', err);
       return false;
     }
     
-    console.log('✅ [LIKES] L\'utilisateur est connecté');
     return true;
   } catch (error) {
     console.error('❌ [LIKES] Erreur lors de la vérification de la connexion:', error);
@@ -432,10 +427,10 @@ const ProductsGrid = () => {
   };
 
   // Handle image loading error
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>, productId: any) => {
-    console.error(`Image loading failed for product ${productId}`);
-    // Use a local image instead of external placeholder service
-    e.currentTarget.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%3E%3Crect%20fill%3D%22%23E0E0E0%22%20width%3D%22300%22%20height%3D%22200%22%2F%3E%3Ctext%20fill%3D%22%23757575%22%20font-family%3D%22Arial%2CVerdana%2CSans-serif%22%20font-size%3D%2216%22%20text-anchor%3D%22middle%22%20x%3D%22150%22%20y%3D%22100%22%3EImage%20non%20disponible%3C%2Ftext%3E%3C%2Fsvg%3E';
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const target = e.currentTarget;
+    target.onerror = null;
+    target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%3E%3Crect%20fill%3D%22%23E0E0E0%22%20width%3D%22300%22%20height%3D%22200%22%2F%3E%3Ctext%20fill%3D%22%23757575%22%20font-family%3D%22Arial%2CVerdana%2CSans-serif%22%20font-size%3D%2216%22%20text-anchor%3D%22middle%22%20x%3D%22150%22%20y%3D%22100%22%3EImage%20non%20disponible%3C%2Ftext%3E%3C%2Fsvg%3E';
   };
   
   // Toggle like pour un produit
@@ -950,7 +945,7 @@ const ProductsGrid = () => {
                         src={getImageUrl(product, currentImages[product.id] || 0)}
                         alt={product.name}
                         className="w-full h-full object-cover transition-opacity duration-500"
-                        onError={(e) => handleImageError(e, product.id)}
+                        onError={handleImageError}
                       />
                       
                       {/* Carousel Navigation */}
@@ -1148,7 +1143,7 @@ const ProductsGrid = () => {
                           }
                         }
                       }}
-                      onError={(e) => handleImageError(e, selectedProduct.id)}
+                      onError={handleImageError}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full">

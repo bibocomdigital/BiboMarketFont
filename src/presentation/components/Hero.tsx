@@ -214,6 +214,7 @@ const images = [
                       src={image.src} 
                       alt={image.alt}
                       fill
+                      priority={index === 0}
                       className="w-full h-full object-cover object-center rounded-2xl"
                       sizes="(min-width: 1024px) 50vw, 100vw"
                     />
