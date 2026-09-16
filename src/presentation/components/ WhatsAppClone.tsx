@@ -28,7 +28,13 @@ import {
 } from '@/services/messageService';
 import { getCurrentUser, getPhotoUrl as getPhotoUrlFromService } from '@/services/authService';
 
-const WhatsAppClone = () => {
+type WhatsAppCloneProps = {
+  embedded?: boolean;
+  variant?: "default" | "merchant";
+};
+
+const WhatsAppClone = ({ embedded = false, variant = "default" }: WhatsAppCloneProps) => {
+  const merchant = variant === "merchant";
   // États
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChat, setSelectedChat] = useState(null);
@@ -79,8 +85,9 @@ const WhatsAppClone = () => {
         // Récupérer l'utilisateur actuel
         const user = getCurrentUser();
         if (!user) {
-          // Rediriger vers la page de connexion si l'utilisateur n'est pas connecté
-          navigate('/login', { state: { returnUrl: window.location.pathname } });
+          if (!embedded) {
+            navigate('/login', { state: { returnUrl: window.location.pathname } });
+          }
           return;
         }
         
@@ -104,7 +111,7 @@ const WhatsAppClone = () => {
     };
     
     init();
-  }, [navigate]);
+  }, [navigate, embedded]);
 
   // Charger les messages quand un chat est sélectionné
   useEffect(() => {
@@ -291,23 +298,23 @@ const WhatsAppClone = () => {
   const renderChatList = () => (
     <div className="flex flex-col h-full w-full">
       {/* En-tête */}
-      <div className="bg-green-600 text-white p-4 flex justify-between items-center">
+      <div className={`${merchant ? "bg-bibocom-primary" : "bg-green-600"} text-white p-4 flex justify-between items-center`}>
         <h1 className="text-xl font-semibold">Discussions</h1>
         <div className="flex gap-4">
-          <Button variant="ghost" size="icon" className="text-white hover:bg-green-700">
+          <Button variant="ghost" size="icon" className={`text-white ${merchant ? "hover:bg-white/10" : "hover:bg-green-700"}`}>
             <Filter size={20} />
           </Button>
-          <Button variant="ghost" size="icon" className="text-white hover:bg-teal-700">
+          <Button variant="ghost" size="icon" className={`text-white ${merchant ? "hover:bg-white/10" : "hover:bg-teal-700"}`}>
             <Search size={20} />
           </Button>
-          <Button variant="ghost" size="icon" className="text-white hover:bg-teal-700">
+          <Button variant="ghost" size="icon" className={`text-white ${merchant ? "hover:bg-white/10" : "hover:bg-teal-700"}`}>
             <MoreVertical size={20} />
           </Button>
         </div>
       </div>
       
       {/* Barre de recherche */}
-      <div className="p-2 bg-gray-100">
+      <div className={`p-2 ${merchant ? "bg-bibocom-light" : "bg-gray-100"}`}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
           <Input
@@ -315,7 +322,6 @@ const WhatsAppClone = () => {
             placeholder="Rechercher ou démarrer une nouvelle discussion"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            variant="search"
             className="pl-10 w-full rounded-full bg-white"
           />
         </div>
@@ -324,7 +330,7 @@ const WhatsAppClone = () => {
       {/* Liste des chats */}
       {loading && chats.length === 0 ? (
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-teal-500"></div>
+          <div className={`animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 ${merchant ? "border-bibocom-accent" : "border-teal-500"}`}></div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto bg-white">
@@ -341,7 +347,13 @@ const WhatsAppClone = () => {
               <div
                 key={chat.partnerId}
                 onClick={() => openChat(chat)}
-                className="flex items-start p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                className={`flex items-start p-3 cursor-pointer border-b border-gray-100 ${
+                  selectedChat?.partnerId === chat.partnerId
+                    ? merchant
+                      ? "bg-bibocom-light"
+                      : "bg-gray-100"
+                    : "hover:bg-gray-50"
+                }`}
               >
                 {/* Avatar */}
                 <div className="relative">
@@ -364,7 +376,9 @@ const WhatsAppClone = () => {
                     <h3 className="font-medium text-gray-900 truncate">
                       {chat.partnerName}
                       {chat.partnerRole && (
-                        <span className="ml-1 text-xs bg-green-100 text-green-800 rounded px-1 py-0.5">
+                        <span className={`ml-1 text-xs rounded px-1 py-0.5 ${
+                          merchant ? "bg-bibocom-secondary/30 text-bibocom-primary" : "bg-green-100 text-green-800"
+                        }`}>
                           {chat.partnerRole}
                         </span>
                       )}
@@ -385,7 +399,7 @@ const WhatsAppClone = () => {
                       )}
                     </p>
                     {chat.unreadCount > 0 && (
-                      <span className="bg-green-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs">
+                      <span className={`${merchant ? "bg-bibocom-accent" : "bg-green-500"} text-white rounded-full h-5 w-5 flex items-center justify-center text-xs`}>
                         {chat.unreadCount}
                       </span>
                     )}
@@ -397,31 +411,38 @@ const WhatsAppClone = () => {
         </div>
       )}
       
-      {/* Bouton nouvelle discussion */}
+      {!embedded && (
       <div className="p-4 bg-gray-100 border-t border-gray-200">
         <Button 
           className="bg-green-500 hover:bg-green-600 text-white rounded-full w-full flex items-center justify-center gap-2"
-          onClick={() => navigate('/contacts')} // Rediriger vers la page des contacts
+          onClick={() => navigate('/contacts')}
         >
           <Plus size={18} />
           <span>Nouvelle discussion</span>
         </Button>
       </div>
+      )}
     </div>
   );
 
   // Conversation
   const renderConversation = () => {
     if (!selectedChat) return (
-      <div className="flex-1 flex flex-col justify-center items-center bg-gray-100 hidden md:flex">
+      <div className={`flex-1 flex flex-col justify-center items-center hidden md:flex ${merchant ? "bg-bibocom-light" : "bg-gray-100"}`}>
         <div className="text-center p-8">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search size={24} className="text-green-600" />
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+            merchant ? "bg-bibocom-secondary/30" : "bg-green-100"
+          }`}>
+            <Search size={24} className={merchant ? "text-bibocom-primary" : "text-green-600"} />
           </div>
-          <h2 className="text-xl font-medium text-gray-800 mb-2">WhatsApp Web</h2>
+          <h2 className={`text-xl font-medium mb-2 ${merchant ? "text-bibocom-primary" : "text-gray-800"}`}>
+            {merchant ? "Messagerie" : "WhatsApp Web"}
+          </h2>
           <p className="text-gray-600 mb-6">
-            Envoyez et recevez des messages sans avoir à garder votre téléphone connecté.<br />
-            Utilisez WhatsApp sur un maximum de 4 appareils connectés et 1 téléphone à la fois.
+            {merchant
+              ? "Sélectionnez une conversation pour échanger avec vos clients."
+              : <>Envoyez et recevez des messages sans avoir à garder votre téléphone connecté.<br />
+            Utilisez WhatsApp sur un maximum de 4 appareils connectés et 1 téléphone à la fois.</>}
           </p>
         </div>
       </div>
@@ -430,13 +451,13 @@ const WhatsAppClone = () => {
     return (
       <div className="flex flex-col h-full flex-1">
         {/* En-tête */}
-        <div className="bg-green-600 text-white p-2 flex items-center">
+        <div className={`${merchant ? "bg-bibocom-primary" : "bg-green-600"} text-white p-2 flex items-center`}>
           {windowWidth < 768 && (
             <Button
               variant="ghost"
               size="icon"
               onClick={backToList}
-              className="text-white hover:bg-teal-700 mr-1 md:hidden"
+              className={`text-white mr-1 md:hidden ${merchant ? "hover:bg-white/10" : "hover:bg-teal-700"}`}
             >
               <ArrowLeft size={22} />
             </Button>
@@ -459,17 +480,17 @@ const WhatsAppClone = () => {
               {partner ? `${partner.firstName} ${partner.lastName}` : selectedChat.partnerName}
             </h2>
             {partner && partner.role && (
-              <p className="text-xs text-green-100 truncate">
+              <p className={`text-xs truncate ${merchant ? "text-bibocom-secondary" : "text-green-100"}`}>
                 {partner.role}
               </p>
             )}
           </div>
           
           <div className="flex gap-2">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-green-700">
+            <Button variant="ghost" size="icon" className={`text-white ${merchant ? "hover:bg-white/10" : "hover:bg-green-700"}`}>
               <Search size={18} />
             </Button>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-teal-700">
+            <Button variant="ghost" size="icon" className={`text-white ${merchant ? "hover:bg-white/10" : "hover:bg-teal-700"}`}>
               <MoreVertical size={18} />
             </Button>
           </div>
@@ -483,6 +504,7 @@ const WhatsAppClone = () => {
           handleSendMessage={handleSendMessage}
           formatTime={formatTime}
           isDarkMode={false}
+          variant={variant}
           sending={sending}
           currentUser={currentUser}
           recipient={partner || selectedChat}
@@ -498,7 +520,7 @@ const WhatsAppClone = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white shadow-xl overflow-hidden w-full max-w-screen-2xl mx-auto">
+    <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-white overflow-hidden w-full ${embedded ? "" : "shadow-xl max-w-screen-2xl mx-auto"}`}>
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar liste de conversations */}
         {showSidebar && (

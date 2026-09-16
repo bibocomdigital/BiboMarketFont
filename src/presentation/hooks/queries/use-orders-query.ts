@@ -13,12 +13,13 @@ export function useOrdersQuery() {
   });
 }
 
-export function useMerchantOrdersQuery() {
+export function useMerchantOrdersQuery(enabled = true) {
   return useQuery({
     queryKey: orderKeys.merchant(),
     queryFn: () => withTimeout(getMerchantOrders()),
-    enabled: typeof window !== "undefined" && isLoggedIn(),
+    enabled: enabled && typeof window !== "undefined" && isLoggedIn(),
     staleTime: 20_000,
+    retry: false,
   });
 }
 

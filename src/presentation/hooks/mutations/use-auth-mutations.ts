@@ -6,14 +6,22 @@ import {
   resetPassword,
   updateUserProfile,
   verifyCode,
+  changePassword,
   type ProfileData,
 } from "@/services/authService";
-import { userKeys } from "@/lib/query-keys";
+import { cartKeys, notificationKeys, orderKeys, userKeys } from "@/lib/query-keys";
 
 export function useLoginMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: login,
     retry: false,
+    onSuccess: (session) => {
+      queryClient.setQueryData(userKeys.profile(), session.user);
+      queryClient.invalidateQueries({ queryKey: cartKeys.all });
+      queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    },
   });
 }
 
@@ -49,6 +57,19 @@ export function useResetPasswordMutation() {
       code: string;
       newPassword: string;
     }) => resetPassword(email, code, newPassword),
+    retry: false,
+  });
+}
+
+export function useChangePasswordMutation() {
+  return useMutation({
+    mutationFn: ({
+      currentPassword,
+      newPassword,
+    }: {
+      currentPassword: string;
+      newPassword: string;
+    }) => changePassword(currentPassword, newPassword),
     retry: false,
   });
 }

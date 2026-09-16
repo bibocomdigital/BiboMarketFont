@@ -5,6 +5,8 @@
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
 import { unwrapList, unwrapRecord } from '../api/api-envelope';
+import { parseApiError } from '../api/fetch-error';
+import { readCache, writeCache } from '../storage/app-cache';
 
 // Définition des constantes pour les rôles utilisateur
 export enum UserRole {
@@ -45,6 +47,18 @@ export interface Shop {
   userId: number;
   createdAt: string;
   updatedAt: string;
+  verifiedBadge?: boolean;
+  status?: boolean;
+  categorieShopId?: number;
+  categorieShop?: {
+    id: number;
+    name: string;
+  };
+  owner?: {
+    firstName?: string;
+    lastName?: string;
+    photo?: string | null;
+  };
   user?: {
     firstName?: string;
     lastName?: string;
@@ -198,20 +212,100 @@ export const getMyShop = async (): Promise<ShopWithProducts> => {
   }
 };
 
+export interface ProdCategory {
+  id: number;
+  name: string;
+  categorieShopId?: number;
+}
+
 export interface ShopCategory {
   id: number;
   name: string;
+  description?: string;
+  prodCategories?: ProdCategory[];
+}
+
+export const SHOP_CATEGORIES_CACHE_KEY = "bibo.categories-shop";
+
+type ShopCategoriesCache = {
+  at: number;
+  items: ShopCategory[];
+};
+
+export function readCachedShopCategories(): ShopCategory[] {
+  const cached = readCache<ShopCategoriesCache | ShopCategory[]>(SHOP_CATEGORIES_CACHE_KEY);
+  if (!cached) return [];
+  if (Array.isArray(cached)) return cached;
+  return Array.isArray(cached.items) ? cached.items : [];
+}
+
+export function persistShopCategories(items: ShopCategory[]): void {
+  writeCache(SHOP_CATEGORIES_CACHE_KEY, { at: Date.now(), items });
 }
 
 export const getShopCategories = async (): Promise<ShopCategory[]> => {
   const response = await fetch(`${backendUrl}/categories-shop`);
   if (!response.ok) {
-    throw new Error('Impossible de charger les catégories de boutique');
+    const cached = readCachedShopCategories();
+    if (cached.length) return cached;
+    throw new Error("Impossible de charger les catégories de boutique");
   }
-  const data = await response.json();
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  return [];
+  const items = unwrapList(await response.json(), [
+    "categories",
+    "categoriesShop",
+  ]) as ShopCategory[];
+  persistShopCategories(items);
+  return items;
+};
+
+export const createShopCategory = async (payload: {
+  name: string;
+  description?: string;
+}): Promise<ShopCategory> => {
+  const response = await fetch(`${backendUrl}/categories-shop`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await parseApiError(response, "Impossible de créer la catégorie boutique");
+  }
+  return unwrapRecord(await response.json()) as unknown as ShopCategory;
+};
+
+export const deleteShopCategory = async (id: number): Promise<void> => {
+  const response = await fetch(`${backendUrl}/categories-shop/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw await parseApiError(response, "Impossible de supprimer la catégorie boutique");
+  }
+};
+
+export const createProductCategory = async (payload: {
+  name: string;
+  categorieShopId: number;
+}): Promise<ProdCategory> => {
+  const response = await fetch(`${backendUrl}/categories-produit`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await parseApiError(response, "Impossible de créer la catégorie produit");
+  }
+  return unwrapRecord(await response.json()) as unknown as ProdCategory;
+};
+
+export const deleteProductCategory = async (id: number): Promise<void> => {
+  const response = await fetch(`${backendUrl}/categories-produit/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw await parseApiError(response, "Impossible de supprimer la catégorie produit");
+  }
 };
 
 export const isLogoUploadFailure = (error: unknown): boolean => {

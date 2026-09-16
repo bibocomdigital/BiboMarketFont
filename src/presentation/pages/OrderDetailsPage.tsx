@@ -195,9 +195,10 @@ const OrderDetailsPage = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate(-1)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="inline-flex items-center gap-1 rounded-full bg-bibocom-accent/10 px-3 py-1.5 text-sm font-medium text-bibocom-accent transition-colors hover:bg-bibocom-accent/20"
               >
-                <ArrowLeft size={20} className="text-gray-600" />
+                <ArrowLeft size={16} />
+                <span className="hidden sm:inline">Retour</span>
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">

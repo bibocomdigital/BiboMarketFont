@@ -30,19 +30,30 @@ const formatOrder = (order: { id: number; createdAt: string; status: string; tot
   total: `${order.totalAmount.toLocaleString('fr-FR')} FCFA`
 });
 
-const RecentOrders = () => {
+const RecentOrders = ({
+  onSeeAll,
+}: {
+  onSeeAll?: () => void;
+} = {}) => {
   const { data: ordersData = [], isPending, isError, error: queryError } = useOrdersQuery();
-  const orders = ordersData.map(formatOrder);
-  const loading = isPending && ordersData.length === 0;
-  const error = isError && ordersData.length === 0 ? getUserErrorMessage(queryError) : null;
+  const orderList = Array.isArray(ordersData) ? ordersData : [];
+  const orders = orderList.map(formatOrder);
+  const loading = isPending && orderList.length === 0;
+  const error = isError && orderList.length === 0 ? getUserErrorMessage(queryError) : null;
 
   return (
-    <div className="bg-white p-6 rounded-md shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-medium text-gray-800">Commandes récentes</h2>
-        <Link to="/commandes" className="text-orange-500 hover:text-orange-600">
-          Voir toutes les commandes
-        </Link>
+    <div className="overflow-hidden rounded-[18px] bg-white p-5 shadow-[0_8px_30px_rgba(10,37,64,0.04)] ring-1 ring-slate-100">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-bibocom-primary">Commandes récentes</h2>
+        {onSeeAll ? (
+          <button type="button" onClick={onSeeAll} className="text-sm font-medium text-bibocom-accent hover:underline">
+            Voir toutes les commandes
+          </button>
+        ) : (
+          <Link to="/client-dashboard?view=orders" className="text-sm font-medium text-bibocom-accent hover:underline">
+            Voir toutes les commandes
+          </Link>
+        )}
       </div>
 
       {error && (

@@ -1,5 +1,6 @@
 // src/services/orderService.ts
 import { backendUrl, isLoggedIn, getAuthHeaders, handleApiError, getAuthToken } from './configService';
+import { unwrapList, unwrapRecord } from '../api/api-envelope';
 
 export interface OrderItem {
   id: number;
@@ -46,6 +47,7 @@ export interface Order {
   updatedAt: string;
   orderItems: OrderItem[];
   client?: {
+    id?: number;
     firstName: string;
     lastName: string;
     phoneNumber: string;
@@ -110,7 +112,7 @@ export const getOrders = async (): Promise<Order[]> => {
       throw new Error(data.message || 'Erreur lors de la récupération des commandes');
     }
     
-    return data.orders;
+    return unwrapList(data, ['orders']) as Order[];
   } catch (error) {
     return handleApiError(error, 'Erreur lors de la récupération des commandes');
   }
@@ -137,7 +139,8 @@ export const getOrderById = async (orderId: number): Promise<Order> => {
       throw new Error(data.message || 'Erreur lors de la récupération des détails de la commande');
     }
     
-    return data.order;
+    const payload = unwrapRecord(data);
+    return (payload.order ?? payload) as Order;
   } catch (error) {
     return handleApiError(error, 'Erreur lors de la récupération des détails de la commande');
   }
@@ -217,7 +220,7 @@ export const getMerchantOrders = async (): Promise<Order[]> => {
       throw new Error(data.message || 'Erreur lors de la récupération des commandes marchandes');
     }
     
-    return data.orders;
+    return unwrapList(data, ['orders']) as Order[];
   } catch (error) {
     return handleApiError(error, 'Erreur lors de la récupération des commandes marchandes');
   }
@@ -259,8 +262,8 @@ export const getOrderDetails = async (orderId: number): Promise<DetailedOrder> =
         throw new Error(errorData.message || 'Erreur lors de la récupération des commandes du marchand');
       }
       
-      const merchantData = await merchantOrdersResponse.json();
-      const targetOrder = merchantData.orders.find((order: any) => order.id === parseInt(orderId.toString()));
+      const merchantOrders = unwrapList(await merchantOrdersResponse.json(), ['orders']) as DetailedOrder[];
+      const targetOrder = merchantOrders.find((order: any) => order.id === parseInt(orderId.toString()));
       
       if (!targetOrder) {
         throw new Error('Commande introuvable ou vous n\'avez pas l\'autorisation de la consulter');
@@ -298,10 +301,10 @@ export const getOrderDetails = async (orderId: number): Promise<DetailedOrder> =
         throw new Error(errorData.message || 'Erreur lors de la récupération des détails de la commande');
       }
       
-      const data = await response.json();
+      const data = unwrapRecord(await response.json());
       console.log('✅ [ORDER] Détails de la commande récupérés avec succès');
       
-      return data.order;
+      return (data.order ?? data) as DetailedOrder;
     }
   } catch (error) {
     console.error('❌ [ORDER] Erreur:', error);
@@ -339,10 +342,10 @@ export const cancelOrder = async (orderId: number): Promise<DetailedOrder> => {
       throw new Error(errorData.message || 'Erreur lors de l\'annulation de la commande');
     }
     
-    const data = await response.json();
+    const data = unwrapRecord(await response.json());
     console.log('✅ [ORDER] Commande annulée avec succès');
     
-    return data.order;
+    return (data.order ?? data) as DetailedOrder;
   } catch (error) {
     console.error('❌ [ORDER] Erreur:', error);
     throw error;
@@ -381,11 +384,11 @@ export const updateOrderStatus = async (orderId: number, newStatus: string): Pro
       throw new Error(errorData.message || 'Erreur lors de la mise à jour du statut');
     }
     
-    const data = await response.json();
+    const data = unwrapRecord(await response.json());
     console.log('✅ [ORDER] Statut mis à jour avec succès');
     console.log('📨 [ORDER] Notifications envoyées:', data.notifications || 'Notifications créées');
     
-    return data.order;
+    return (data.order ?? data) as DetailedOrder;
   } catch (error) {
     console.error('❌ [ORDER] Erreur:', error);
     throw error;

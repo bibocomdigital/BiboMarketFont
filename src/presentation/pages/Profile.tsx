@@ -29,17 +29,18 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
   logout, 
-  getUser,
   ProfileData
 } from '@/services/authService';
+import { useAuthSession } from '@/hooks/use-auth-session';
 import { useFollowersQuery, useFollowingQuery, useFollowStatusQuery, useProfileQuery } from '@/hooks/queries/use-user-query';
 import { useUpdateProfileMutation } from '@/hooks/mutations/use-auth-mutations';
 import { useToggleFollowMutation } from '@/hooks/mutations/use-catalog-mutations';
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { userId } = useParams(); // Récupère l'ID de l'utilisateur depuis l'URL si présent
+  const { userId } = useParams();
   const { toast } = useToast();
+  const { user: sessionUser, isReady, isAuthenticated } = useAuthSession();
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   const profileQuery = useProfileQuery();
@@ -48,21 +49,23 @@ const Profile = () => {
   const isSaving = updateProfileMutation.isPending;
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  
-  const [isOwnProfile, setIsOwnProfile] = useState(true);
+  const sessionUserId = sessionUser?.id ?? 0;
+  const isOwnProfile = !userId || parseInt(userId, 10) === sessionUserId;
+  const isMerchantRole =
+    (sessionUser?.role || "").toUpperCase() === "MERCHANT" ||
+    (sessionUser?.role || "").toUpperCase() === "COMMERCANT";
 
-  const localUser = getUser();
   const [userInfo, setUserInfo] = useState({
-    id: localUser?.id || 0,
-    firstName: localUser?.firstName || '',
-    lastName: localUser?.lastName || '',
-    email: localUser?.email || '',
-    phone: localUser?.phoneNumber || '',
-    address: `${localUser?.city || ''}, ${localUser?.country || ''}`,
+    id: sessionUser?.id || 0,
+    firstName: sessionUser?.firstName || '',
+    lastName: sessionUser?.lastName || '',
+    email: sessionUser?.email || '',
+    phone: sessionUser?.phoneNumber || '',
+    address: `${sessionUser?.city || ''}, ${sessionUser?.country || ''}`.replace(/^, |, $/g, ''),
     bio: '', 
     birthdate: '', 
-    avatar: localUser?.photo || '',
-    role: localUser?.role || '',
+    avatar: sessionUser?.photo || '',
+    role: sessionUser?.role || '',
   });
 
   const [editInfo, setEditInfo] = useState({ ...userInfo });
@@ -70,38 +73,41 @@ const Profile = () => {
   const followersQuery = useFollowersQuery(followProfileId || null);
   const followingQuery = useFollowingQuery(followProfileId || null);
   const followStatusQuery = useFollowStatusQuery(userId ? parseInt(userId, 10) : null, !isOwnProfile);
-  const followerCount = followersQuery.data?.pagination.total ?? 0;
-  const followingCount = followingQuery.data?.pagination.total ?? 0;
+  const followerCount = followersQuery.data?.pagination?.total ?? followersQuery.data?.followers?.length ?? 0;
+  const followingCount = followingQuery.data?.pagination?.total ?? followingQuery.data?.following?.length ?? 0;
   const isFollowing = followStatusQuery.data?.isFollowing ?? false;
   const isLoadingFollow = toggleFollowMutation.isPending;
-  const isLoading = profileQuery.isPending && !profileQuery.data;
+  const isLoading = profileQuery.isPending && !profileQuery.data && !sessionUser;
 
   useEffect(() => {
-    if (userId && parseInt(userId) !== localUser?.id) {
-      setIsOwnProfile(false);
-    } else {
-      setIsOwnProfile(true);
+    if (!isReady) return;
+    if (!isAuthenticated) {
+      navigate("/login", { replace: true });
+      return;
     }
-  }, [userId, localUser]);
+    if (isMerchantRole && isOwnProfile) {
+      navigate("/merchant-dashboard?view=profile", { replace: true });
+    }
+  }, [isReady, isAuthenticated, isMerchantRole, isOwnProfile, navigate]);
 
   useEffect(() => {
     const userData = profileQuery.data;
     if (!userData) return;
     const mapped = {
-      id: userData.id || (!isOwnProfile && userId ? parseInt(userId, 10) : localUser?.id) || 0,
+      id: userData.id || (!isOwnProfile && userId ? parseInt(userId, 10) : sessionUserId) || 0,
       firstName: userData.firstName || '',
       lastName: userData.lastName || '',
       email: userData.email || '',
       phone: userData.phoneNumber || '',
-      address: `${userData.city || ''}, ${userData.country || ''}`,
+      address: `${userData.city || ''}, ${userData.country || ''}`.replace(/^, |, $/g, ''),
       bio: userData.bio || '',
       birthdate: userData.birthdate || '',
       avatar: userData.photo?.toString() || '',
-      role: userData.role || localUser?.role || '',
+      role: userData.role || sessionUser?.role || '',
     };
     setUserInfo(mapped);
     setEditInfo(mapped);
-  }, [profileQuery.data, isOwnProfile, userId, localUser]);
+  }, [profileQuery.data, isOwnProfile, userId, sessionUserId, sessionUser?.role]);
 
   const handleLogout = () => {
     logout();
@@ -229,6 +235,13 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-bibocom-light to-white pt-24 pb-10 px-4 sm:px-6">
       <div className="max-w-6xl mx-auto">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="mb-4 inline-flex items-center gap-1 rounded-full bg-bibocom-accent/10 px-3 py-1.5 text-sm font-medium text-bibocom-accent transition-colors hover:bg-bibocom-accent/20"
+        >
+          ← Retour
+        </button>
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-bibocom-primary" />
@@ -247,7 +260,8 @@ const Profile = () => {
                           alt={`${userInfo.firstName} ${userInfo.lastName}`} 
                         />
                         <AvatarFallback className="bg-bibocom-primary text-white text-2xl">
-                          {userInfo.firstName.charAt(0)}{userInfo.lastName.charAt(0)}
+                          {(userInfo.firstName?.[0] || "").toUpperCase()}
+                          {(userInfo.lastName?.[0] || "").toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       {isOwnProfile && (
@@ -514,18 +528,24 @@ const Profile = () => {
                     <CardDescription>Personnes qui vous suivent ({followerCount})</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {/* Cette partie serait à compléter avec la liste des abonnés */}
-                    <div className="text-center py-8">
-                      <Users className="h-12 w-12 mx-auto text-gray-400 mb-2" />
-                      <p className="text-gray-500">
-                        {followerCount > 0 
-                          ? "Chargement de vos abonnés..." 
-                          : "Vous n'avez pas encore d'abonnés"}
-                      </p>
-                      {followerCount === 0 && (
-                        <p className="text-sm text-gray-400 mt-1">Partagez votre profil pour attirer des abonnés</p>
-                      )}
-                    </div>
+                    {followersQuery.isPending ? (
+                      <p className="py-8 text-center text-gray-500">Chargement de vos abonnés…</p>
+                    ) : (followersQuery.data?.followers || []).length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                        <p className="text-gray-500">Vous n'avez pas encore d'abonnés</p>
+                      </div>
+                    ) : (
+                      <ul className="space-y-3">
+                        {(followersQuery.data?.followers || []).map((person) => (
+                          <li key={person.id} className="flex items-center gap-3 rounded-lg border p-3">
+                            <span className="font-medium">
+                              {person.firstName} {person.lastName}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </CardContent>
                 </Card>
               )}

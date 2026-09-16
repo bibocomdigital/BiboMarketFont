@@ -5,7 +5,7 @@ import { toggleFollow } from "@/services/subscriptionService";
 import { addComment, replyToComment } from "@/services/commentService";
 import { toggleProductDislike, toggleProductLike } from "@/services/likeService";
 import { sendMessage } from "@/services/messageService";
-import { productKeys, shopKeys, userKeys, messageKeys } from "@/lib/query-keys";
+import { productKeys, shopKeys, userKeys, messageKeys, merchantKeys } from "@/lib/query-keys";
 
 export function useCreateProductMutation() {
   const queryClient = useQueryClient();
@@ -15,6 +15,7 @@ export function useCreateProductMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: productKeys.lists() });
       queryClient.invalidateQueries({ queryKey: shopKeys.mine() });
+      queryClient.invalidateQueries({ queryKey: merchantKeys.all });
     },
   });
 }
@@ -27,6 +28,7 @@ export function useCreateShopMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: shopKeys.mine() });
       queryClient.invalidateQueries({ queryKey: shopKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: merchantKeys.all });
     },
   });
 }
@@ -113,7 +115,9 @@ export function useSendMessageMutation() {
     retry: false,
     onSuccess: (_data, { receiverId }) => {
       queryClient.invalidateQueries({ queryKey: messageKeys.conversation(receiverId) });
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversations() });
       queryClient.invalidateQueries({ queryKey: messageKeys.inbox() });
+      queryClient.invalidateQueries({ queryKey: messageKeys.all });
     },
   });
 }

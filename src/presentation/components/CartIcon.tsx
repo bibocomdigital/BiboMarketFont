@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { getCartItemsCount, useCartQuery } from '@/hooks/queries/use-cart-query';
+import { isCartAccessible } from '@/services/cartService';
 
 interface CartIconProps {
   className?: string;
@@ -10,13 +11,14 @@ interface CartIconProps {
 }
 
 const CartIcon: React.FC<CartIconProps> = ({ className, onClick }) => {
-  const { data: cart, isPending, isError, refetch } = useCartQuery();
+  const { data: cart, isLoading, isError, refetch } = useCartQuery();
   const itemsCount = getCartItemsCount(cart?.items);
-  const loading = isPending && !cart;
+  const loading = isLoading && !cart;
   const error = isError && !cart;
 
   useEffect(() => {
     const handleCartUpdate = () => {
+      if (!isCartAccessible()) return;
       void refetch();
     };
     window.addEventListener('cart-updated', handleCartUpdate);

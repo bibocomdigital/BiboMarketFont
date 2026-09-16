@@ -22,8 +22,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { isChatMessageNotification } from '@/services/notificationService';
 
-const NotificationCenter = () => {
+const NotificationCenter = ({ tone = "default" }: { tone?: "default" | "admin" }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
@@ -33,11 +35,14 @@ const NotificationCenter = () => {
   const deleteAll = useDeleteAllNotificationsMutation();
 
   const { 
-    data: notifications = [], 
+    data: notificationsData = [], 
     isPending,
     isError,
     refetch
   } = useNotificationsQuery();
+  const notifications = (Array.isArray(notificationsData) ? notificationsData : []).filter(
+    (item) => !isChatMessageNotification(item)
+  );
   const isLoading = isPending && notifications.length === 0;
 
   // Nombre de notifications non lues
@@ -186,10 +191,26 @@ const NotificationCenter = () => {
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <button 
-            className="relative p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-bibocom-primary focus:ring-opacity-50"
+            className={cn(
+              "relative rounded-full p-2 focus:outline-none focus:ring-2",
+              tone === "admin"
+                ? "hover:bg-white/10 focus:ring-[#7ee8d8]/40"
+                : "hover:bg-gray-100 focus:ring-bibocom-primary focus:ring-opacity-50"
+            )}
             aria-label="Notifications"
           >
-            <Bell size={20} className={unreadCount > 0 ? "text-bibocom-primary" : "text-gray-600"} />
+            <Bell
+              size={20}
+              className={
+                unreadCount > 0
+                  ? tone === "admin"
+                    ? "text-[#7ee8d8]"
+                    : "text-bibocom-primary"
+                  : tone === "admin"
+                    ? "text-white/70"
+                    : "text-gray-600"
+              }
+            />
             {unreadCount > 0 && (
               <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
                 {unreadCount > 99 ? '99+' : unreadCount > 9 ? '9+' : unreadCount}

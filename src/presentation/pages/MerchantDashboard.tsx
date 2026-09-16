@@ -1,287 +1,229 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { LogOut, User, Package, BarChart2, Users, PlusCircle, Settings, Menu, Store } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { useMyShopQuery } from '@/hooks/queries/use-shops-query';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import NoShop from '@/components/shop/NoShop';
-import ShopOverview from '@/components/shop/ShopOverview';
-import EditShopDialog from '@/components/shop/EditShopDialog';
-import NotificationCenter from '@/components/notification/NotificationCenter ';// Importation du composant de notifications
- // Importation du composant de messages
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { logout } from '@/services/authService';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
-import MessageCenter from '@/components/MessageCenter';
+import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { User } from "lucide-react";
+import { getErrorStatus } from "@domain/errors/app-error";
+import { useAuthSession, dashboardPathFor } from "@/hooks/use-auth-session";
+import { useMyShopQuery } from "@/hooks/queries/use-shops-query";
+import {
+  useMerchantProductStatsQuery,
+  useMerchantRevenueChartQuery,
+  useMerchantStatsQuery,
+} from "@/hooks/queries/use-merchant-query";
+import NotificationCenter from "@/components/notification/NotificationCenter ";
+import { MerchantShell, type MerchantSection } from "./merchant/MerchantShell";
+import { MerchantOverview } from "./merchant/MerchantOverview";
+import { MerchantShopView } from "./merchant/MerchantShopView";
+import { MerchantProductsView } from "./merchant/MerchantProductsView";
+import { MerchantOrdersView } from "./merchant/MerchantOrdersView";
+import { MerchantMessagesView } from "./merchant/MerchantMessagesView";
+import { MerchantProfileView } from "./merchant/MerchantProfileView";
+import { isShopMissingError, Panel, queryErrorMessage } from "./merchant/ui";
+
+const SECTIONS: MerchantSection[] = ["dashboard", "boutique", "products", "orders", "messages", "profile"];
+const SIDEBAR_KEY = "bibo.merchant.sidebarCollapsed";
+
+function isMerchantSection(value: string | null): value is MerchantSection {
+  return !!value && SECTIONS.includes(value as MerchantSection);
+}
 
 const MerchantDashboard = () => {
-  const { toast } = useToast();
   const navigate = useNavigate();
-  const [showEditShop, setShowEditShop] = useState(false);
-  
-  const { 
-    data: shopData, 
-    isPending, 
-    isError, 
-    error, 
-    refetch 
-  } = useMyShopQuery();
-  const isLoading = isPending && !shopData;
-  
-  // Vérifier correctement si l'utilisateur a une boutique
-  // Modification ici pour s'assurer que hasShop est correctement évalué
-  const hasShop = !isError && shopData && shopData.id;
-  
-  // Pour débugger
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user, isAuthenticated, isReady, logout } = useAuthSession();
+  const isMerchant =
+    (user?.role || "").toUpperCase() === "MERCHANT" ||
+    (user?.role || "").toUpperCase() === "COMMERCANT";
+  const enabled = isReady && isAuthenticated && isMerchant;
+
+  const viewParam = searchParams.get("view");
+  const section: MerchantSection = isMerchantSection(viewParam) ? viewParam : "dashboard";
+  const orderParam = Number(searchParams.get("order") || 0);
+  const selectedOrderId = Number.isFinite(orderParam) && orderParam > 0 ? orderParam : null;
+  const partnerParam = Number(searchParams.get("partner") || 0);
+  const selectedPartnerId = Number.isFinite(partnerParam) && partnerParam > 0 ? partnerParam : null;
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [days, setDays] = useState(7);
+
+  const shopQuery = useMyShopQuery(enabled);
+  const shopMissing = isShopMissingError(shopQuery.error);
+  const hasShop = Boolean(shopQuery.data?.id) && !shopMissing;
+  const statsEnabled = enabled && hasShop && section === "dashboard";
+  const statsQuery = useMerchantStatsQuery(statsEnabled);
+  const chartQuery = useMerchantRevenueChartQuery(days, statsEnabled);
+  const productStatsQuery = useMerchantProductStatsQuery(statsEnabled);
+
   useEffect(() => {
-    console.log('Shop data:', shopData);
-    console.log('Has shop?', hasShop);
-  }, [shopData, hasShop]);
-  
-  const handleShopCreated = () => {
-    console.log('🔄 [MERCHANT] Rafraîchissement des données de la boutique après création');
-    setTimeout(() => {
-      refetch();
-    }, 1000);
+    try {
+      setCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+    } catch {
+      setCollapsed(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!isAuthenticated) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    if (!isMerchant) {
+      navigate(dashboardPathFor(user?.role), { replace: true });
+    }
+  }, [isReady, isAuthenticated, isMerchant, navigate, user?.role]);
+
+  useEffect(() => {
+    const errors = [statsQuery.error, chartQuery.error, productStatsQuery.error, shopQuery.error];
+    if (errors.some((error) => getErrorStatus(error) === 401)) {
+      logout();
+      navigate("/login", { replace: true });
+    }
+  }, [statsQuery.error, chartQuery.error, productStatsQuery.error, shopQuery.error, logout, navigate]);
+
+  const displayName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+
+  const handleSectionChange = (next: MerchantSection) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next === "dashboard") params.delete("view");
+      else params.set("view", next);
+      if (next !== "orders" && next !== "dashboard") params.delete("order");
+      if (next !== "messages") params.delete("partner");
+      return params;
+    });
   };
 
-  const handleShopUpdated = () => {
-    console.log('🔄 [MERCHANT] Rafraîchissement des données de la boutique après mise à jour');
-    // Forcer un refetch pour récupérer les données mises à jour
-    setTimeout(() => {
-      refetch();
-    }, 1000);
+  const handleSelectOrder = (id: number | null) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (id) {
+        params.set("view", section === "dashboard" ? "orders" : section);
+        params.set("order", String(id));
+      } else {
+        params.delete("order");
+      }
+      return params;
+    });
+  };
+
+  const handleToggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
   };
 
   const handleLogout = () => {
-    console.log('👋 [MERCHANT] Déconnexion de l\'utilisateur');
     logout();
-    toast({
-      title: 'Déconnexion réussie',
-      description: 'Vous avez été déconnecté avec succès.'
-    });
-    navigate('/login');
+    navigate("/login");
   };
 
-  // Fonction pour naviguer vers WhatsApp clone
-  const navigateToWhatsAppClone = () => {
-    navigate('/whatsapp'); // ou l'URL de votre WhatsApp clone
+  const refreshShop = () => {
+    void shopQuery.refetch();
   };
-  
-  // Log pour débugger
-  useEffect(() => {
-    if (isError) {
-      console.log('❌ [MERCHANT] Erreur lors de la récupération de la boutique:', error);
-    }
-    if (hasShop) {
-      console.log('✅ [MERCHANT] Boutique trouvée:', shopData);
-    } else {
-      console.log('ℹ️ [MERCHANT] Aucune boutique trouvée pour ce marchand');
-    }
-  }, [isError, hasShop, shopData, error]);
-  
+
+  if (!isReady || !isAuthenticated || !isMerchant) {
+    return <div className="min-h-screen bg-bibocom-light" />;
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header avec menu */}
-      <header className="bg-white shadow-md py-4 sticky top-0 z-10">
-        <div className="container mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center">
-            <Link to="/" className="text-2xl font-bold text-bibocom-primary">
-              <span className="flex items-center">
-                <Store className="mr-2 h-6 w-6" />
-                BibocomMarket
-              </span>
-            </Link>
-          </div>
-          
-          <div className="hidden md:flex items-center space-x-6">
-            {hasShop && (
-              <>
-                <Link to="/mes-produits" className="text-gray-600 hover:text-bibocom-accent transition-colors">
-                  Mes Produits
-                </Link>
-                <Link to="/commandes-recues" className="text-gray-600 hover:text-bibocom-accent transition-colors">
-                  Commandes
-                </Link>
-          
-                <Link to="/statistiques" className="text-gray-600 hover:text-bibocom-accent transition-colors">
-                  Statistiques
-                </Link>
-              </>
-            )}
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            {/* Centre de notifications */}
-            <NotificationCenter />
-            <div className="relative">
-  <MessageCenter onRedirect={navigateToWhatsAppClone} />
-  {/* Dropdown messages */}
-</div>
-            
-            {/* User dropdown menu (uses shadcn dropdown) */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100">
-                  <User size={20} className="text-gray-600" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 z-50">
-                <DropdownMenuItem asChild>
-                  <Link to="/profile" className="flex items-center">
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Mon profil</span>
-                  </Link>
-                </DropdownMenuItem>
-                {hasShop && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/boutique-parametres" className="flex items-center">
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span>Paramètres boutique</span>
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={handleLogout} className="text-red-500 hover:text-red-600 cursor-pointer">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Se déconnecter</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
-            {/* Menu mobile */}
-            <Sheet>
-              <SheetTrigger asChild>
-                <button className="md:hidden p-2 rounded-md hover:bg-gray-100">
-                  <Menu size={20} className="text-gray-600" />
-                </button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[300px]">
-                <div className="flex flex-col h-full py-6">
-                  <div className="px-2 mb-6">
-                    <Link to="/" className="text-xl font-bold text-bibocom-primary flex items-center">
-                      <Store className="mr-2 h-6 w-6" />
-                      BibocomMarket
-                    </Link>
-                  </div>
-                  
-                  <nav className="flex-1 space-y-4 px-2">
-                    {hasShop && (
-                      <>
-                        <Link to="/mes-produits" className="flex items-center py-2 px-4 text-gray-700 hover:bg-gray-100 rounded-md">
-                          <Package className="mr-3 h-5 w-5 text-bibocom-accent" />
-                          Mes Produits
-                        </Link>
-                        <Link to="/commandes-recues" className="flex items-center py-2 px-4 text-gray-700 hover:bg-gray-100 rounded-md">
-                          <Package className="mr-3 h-5 w-5 text-green-500" />
-                          Commandes
-                        </Link>
-                        <div className="px-4 py-2">
-                          <MessageCenter onRedirect={navigateToWhatsAppClone} />
-                        </div>
-                        <Link to="/statistiques" className="flex items-center py-2 px-4 text-gray-700 hover:bg-gray-100 rounded-md">
-                          <BarChart2 className="mr-3 h-5 w-5 text-purple-500" />
-                          Statistiques
-                        </Link>
-                      </>
-                    )}
-                  </nav>
-                  
-                  <div className="border-t pt-4 mt-4 px-2">
-                    <Link to="/profile" className="flex items-center py-2 px-4 text-gray-700 hover:bg-gray-100 rounded-md">
-                      <User className="mr-3 h-5 w-5" />
-                      Mon profil
-                    </Link>
-                    {hasShop && (
-                      <Link to="/boutique-parametres" className="flex items-center py-2 px-4 text-gray-700 hover:bg-gray-100 rounded-md">
-                        <Settings className="mr-3 h-5 w-5" />
-                        Paramètres boutique
-                      </Link>
-                    )}
-                    <button 
-                      onClick={handleLogout}
-                      className="flex items-center w-full py-2 px-4 text-red-500 hover:bg-gray-100 rounded-md"
-                    >
-                      <LogOut className="mr-3 h-5 w-5" />
-                      Se déconnecter
-                    </button>
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+    <MerchantShell
+      section={section}
+      onSectionChange={handleSectionChange}
+      collapsed={collapsed}
+      onToggleCollapsed={handleToggleCollapsed}
+      mobileOpen={mobileOpen}
+      onMobileOpenChange={setMobileOpen}
+      displayName={displayName}
+      onLogout={handleLogout}
+      headerExtra={
+        <div className="flex items-center gap-2">
+          <NotificationCenter />
+          <button
+            type="button"
+            onClick={() => handleSectionChange("profile")}
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-bibocom-primary shadow-sm"
+            aria-label="Mon profil"
+          >
+            <User className="h-4 w-4" />
+          </button>
         </div>
-      </header>
-      
-      {/* Contenu principal */}
-      <main className="flex-1">
-        <div className="container mx-auto px-4 py-8">
-          {/* Titre de la page */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-bibocom-primary">Espace commerçant</h1>
-            <p className="text-gray-600 mt-2">Gérez votre boutique et développez votre activité</p>
-            
-            {hasShop && (
-              <Alert className="mt-4 bg-green-50 border-green-200">
-                <AlertDescription className="text-green-700">
-                  Vous gérez actuellement la boutique <span className="font-semibold">{shopData.name}</span>. Les commerçants ne peuvent gérer qu'une seule boutique à la fois.
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
-          
-          {/* État de chargement */}
-          {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-bibocom-primary"></div>
-              <span className="ml-3 text-bibocom-primary">Chargement...</span>
-            </div>
+      }
+    >
+      {section === "dashboard" && (
+        <>
+          {shopQuery.isError && !shopMissing ? (
+            <Panel className="p-5">
+              <p className="text-sm text-slate-500">{queryErrorMessage(shopQuery.error)}</p>
+            </Panel>
+          ) : hasShop || shopQuery.isPending ? (
+            <MerchantOverview
+              stats={statsQuery.data}
+              chart={chartQuery.data}
+              productStats={productStatsQuery.data}
+              shop={shopQuery.data}
+              loading={shopQuery.isPending || statsQuery.isPending}
+              error={statsQuery.error}
+              days={days}
+              onDaysChange={setDays}
+              onOpenOrder={(id) => {
+                setSearchParams((prev) => {
+                  const params = new URLSearchParams(prev);
+                  params.set("view", "orders");
+                  params.set("order", String(id));
+                  return params;
+                });
+              }}
+            />
+          ) : (
+            <MerchantShopView shop={null} loading={false} onShopChanged={refreshShop} />
           )}
-          
-          {/* Affichage de la boutique ou du composant NoShop */}
-          {!isLoading && (
-  <>
-    {hasShop ? (
-      <>
-        <ShopOverview 
-          shop={shopData}
-          products={shopData.products || []}
-          onEditClick={() => setShowEditShop(true)}
+        </>
+      )}
+      {section === "boutique" && (
+        <MerchantShopView
+          shop={hasShop ? shopQuery.data : null}
+          loading={shopQuery.isPending}
+          onShopChanged={refreshShop}
         />
-        
-        {/* Modal d'édition de la boutique */}
-        {showEditShop && (
-          <EditShopDialog
-            shop={shopData}
-            open={showEditShop}
-            onOpenChange={setShowEditShop}
-            onShopUpdated={handleShopUpdated}
-          />
-        )}
-      </>
-    ) : (
-      <NoShop onShopCreated={handleShopCreated} />
-    )}
-  </>
-)}
-        </div>
-      </main>
-      
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-6 mt-auto">
-        <div className="container mx-auto px-4">
-          <div className="text-center">
-            <p>&copy; 2024 BibocomMarket. Tous droits réservés.</p>
-          </div>
-        </div>
-      </footer>
-    </div>
+      )}
+      {section === "products" && (
+        <MerchantProductsView
+          merchantId={user?.id ?? null}
+          hasShop={hasShop}
+          enabled={enabled}
+          onShopCreated={refreshShop}
+        />
+      )}
+      {section === "orders" && (
+        <MerchantOrdersView
+          enabled={enabled}
+          hasShop={hasShop}
+          selectedOrderId={selectedOrderId}
+          onSelectOrder={handleSelectOrder}
+          onShopCreated={refreshShop}
+          onMessageClient={(id) => {
+            setSearchParams((prev) => {
+              const params = new URLSearchParams(prev);
+              params.set("view", "messages");
+              params.set("partner", String(id));
+              params.delete("order");
+              return params;
+            });
+          }}
+        />
+      )}
+      {section === "messages" && <MerchantMessagesView initialPartnerId={selectedPartnerId} />}
+      {section === "profile" && <MerchantProfileView />}
+    </MerchantShell>
   );
 };
 

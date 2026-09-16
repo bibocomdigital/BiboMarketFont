@@ -254,7 +254,7 @@ const CartPage = () => {
           <a 
             href="#" 
             onClick={goBack}
-            className="flex items-center text-orange-500 hover:text-orange-600 transition-colors"
+            className="inline-flex items-center rounded-full bg-bibocom-accent/10 px-3 py-1.5 text-sm font-medium text-bibocom-accent transition-colors hover:bg-bibocom-accent/20"
           >
             <ChevronLeft size={20} />
             <span className="ml-1">Retour</span>

@@ -4,6 +4,7 @@
 
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { unwrapList, unwrapRecord } from '../api/api-envelope';
 
 // Types pour les articles et le panier
 export interface CartItem {
@@ -76,24 +77,35 @@ export interface ShareCartResponse {
   whatsappLinks: WhatsAppLink[];
 }
 
+function emptyCart(): Cart {
+  return {
+    id: 0,
+    userId: 0,
+    items: [],
+    totalPrice: 0,
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
+function unwrapCart(raw: unknown): Cart {
+  const payload = unwrapRecord(raw);
+  const cart = (payload.cart ?? payload) as Cart;
+  return {
+    ...cart,
+    items: Array.isArray(cart?.items) ? cart.items : [],
+    totalPrice: Number(cart?.totalPrice ?? 0),
+  };
+}
+
 /**
  * Vérifie si l'utilisateur est connecté pour accéder au panier
  * @returns {boolean} true si l'utilisateur est connecté
  */
 export const isCartAccessible = (): boolean => {
   try {
-    const token = getAuthToken();
-    const hasAccess = !!token;
-    
-    if (hasAccess) {
-      console.log('✅ [CART] Utilisateur connecté, accès au panier autorisé');
-    } else {
-      console.log('❌ [CART] Utilisateur non connecté, accès au panier refusé');
-    }
-    
-    return hasAccess;
-  } catch (error) {
-    console.error('❌ [CART] Erreur lors de la vérification d\'accès au panier:', error);
+    return !!getAuthToken();
+  } catch {
     return false;
   }
 };
@@ -143,14 +155,17 @@ export const addToCart = async (productId: number, quantity: number = 1): Promis
       throw new Error(errorData.message || 'Erreur lors de l\'ajout au panier');
     }
     
-    const data = await response.json();
+    const payload = unwrapRecord(await response.json());
+    const cart = unwrapCart(payload);
     console.log('✅ [CART] Produit ajouté avec succès au panier');
-    console.log('📊 [CART] Nombre total d\'articles dans le panier:', data.cart.items.length);
+    console.log('📊 [CART] Nombre total d\'articles dans le panier:', cart.items.length);
     
-    // Déclencher l'événement de mise à jour du panier
     triggerCartUpdate();
     
-    return data;
+    return {
+      message: String(payload.message ?? 'Produit ajouté'),
+      cart,
+    };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);
     throw error;
@@ -162,37 +177,27 @@ export const addToCart = async (productId: number, quantity: number = 1): Promis
  * @returns {Promise<Cart>} Le panier de l'utilisateur
  */
 export const getCart = async (): Promise<Cart> => {
+  if (!isCartAccessible()) {
+    return emptyCart();
+  }
+
   try {
-    console.log('🔄 [CART] Récupération du contenu du panier');
-    
-    // Vérifier si l'utilisateur est connecté
-    if (!isCartAccessible()) {
-      throw new Error('Vous devez être connecté pour accéder au panier');
-    }
-    
-    // Appeler l'API pour récupérer le panier
     const response = await fetch(`${backendUrl}/cart`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
-    
-    console.log('📊 [CART] Statut de la réponse de récupération:', response.status);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [CART] Erreur lors de la récupération du panier:', errorData);
-      throw new Error(errorData.message || 'Erreur lors de la récupération du panier');
+
+    if (response.status === 401 || response.status === 403) {
+      return emptyCart();
     }
-    
-    const data = await response.json();
-    console.log('✅ [CART] Panier récupéré avec succès');
-    console.log('📊 [CART] Nombre d\'articles:', data.cart.items.length);
-    console.log('💰 [CART] Prix total:', data.cart.totalPrice, 'FCFA');
-    
-    return data.cart;
-  } catch (error) {
-    console.error('❌ [CART] Erreur:', error);
-    throw error;
+
+    if (!response.ok) {
+      return emptyCart();
+    }
+
+    return unwrapCart(await response.json());
+  } catch {
+    return emptyCart();
   }
 };
 
@@ -228,13 +233,15 @@ export const updateCartItem = async (itemId: number, quantity: number): Promise<
       throw new Error(errorData.message || 'Erreur lors de la mise à jour du panier');
     }
     
-    const data = await response.json();
+    const payload = unwrapRecord(await response.json());
     console.log('✅ [CART] Article mis à jour avec succès');
     
-    // Déclencher l'événement de mise à jour du panier
     triggerCartUpdate();
     
-    return data;
+    return {
+      message: String(payload.message ?? 'Panier mis à jour'),
+      cart: unwrapCart(payload),
+    };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);
     throw error;
@@ -270,13 +277,12 @@ export const removeFromCart = async (itemId: number): Promise<RemoveFromCartResp
       throw new Error(errorData.message || 'Erreur lors de la suppression de l\'article');
     }
     
-    const data = await response.json();
+    const payload = unwrapRecord(await response.json());
     console.log('✅ [CART] Article supprimé avec succès');
     
-    // Déclencher l'événement de mise à jour du panier
     triggerCartUpdate();
     
-    return data;
+    return { message: String(payload.message ?? 'Article supprimé') };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);
     throw error;
@@ -310,13 +316,12 @@ export const clearCart = async (): Promise<ClearCartResponse> => {
       throw new Error(errorData.message || 'Erreur lors du vidage du panier');
     }
     
-    const data = await response.json();
+    const payload = unwrapRecord(await response.json());
     console.log('✅ [CART] Panier vidé avec succès');
     
-    // Déclencher l'événement de mise à jour du panier
     triggerCartUpdate();
     
-    return data;
+    return { message: String(payload.message ?? 'Panier vidé') };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);
     throw error;
@@ -353,19 +358,20 @@ export const shareCartViaWhatsApp = async (message: string = ''): Promise<ShareC
       throw new Error(errorData.message || 'Erreur lors du partage du panier');
     }
     
-    const data = await response.json();
+    const payload = unwrapRecord(await response.json());
+    const whatsappLinks = unwrapList(payload, ['whatsappLinks']) as WhatsAppLink[];
     
-    // Vérifier la présence des liens WhatsApp
-    if (!data.whatsappLinks || !Array.isArray(data.whatsappLinks)) {
-      console.error('❌ [CART] Format de réponse invalide:', data);
+    if (!whatsappLinks.length) {
+      console.error('❌ [CART] Format de réponse invalide:', payload);
       throw new Error('Format de réponse invalide pour les liens WhatsApp');
     }
     
     console.log('✅ [CART] Liens WhatsApp générés avec succès');
-    console.log('📊 [CART] Nombre de liens générés:', data.whatsappLinks.length);
-    console.log('🔗 [CART] Données reçues du backend:', data.whatsappLinks);
     
-    return data;
+    return {
+      message: String(payload.message ?? ''),
+      whatsappLinks,
+    };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);
     throw error;
@@ -402,16 +408,17 @@ export const createOrderFromCart = async (message: string = ''): Promise<OrderRe
       throw new Error(errorData.message || 'Erreur lors de la création de la commande');
     }
     
-    const data = await response.json();
+    const payload = unwrapRecord(await response.json());
+    const order = payload.order as OrderResponse['order'];
     console.log('✅ [CART] Commande créée avec succès');
-    console.log('🆔 [CART] ID de la commande:', data.order.id);
-    console.log('💰 [CART] Montant total:', data.order.totalAmount, 'FCFA');
-    console.log('📊 [CART] Statut:', data.order.status);
     
-    // Déclencher l'événement de mise à jour du panier après création de commande
     triggerCartUpdate();
     
-    return data;
+    return {
+      message: String(payload.message ?? 'Commande créée'),
+      order,
+      whatsappLinks: unwrapList(payload, ['whatsappLinks']) as WhatsAppLink[],
+    };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);
     throw error;

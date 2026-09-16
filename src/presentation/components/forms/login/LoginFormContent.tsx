@@ -20,6 +20,7 @@ import ForgotPasswordDialog from "./ForgotPasswordDialog";
 import SocialLoginButton from "./SocialLoginButton";
 import { Link, useNavigate } from "react-router-dom";
 import { useLoginMutation } from "@/hooks/mutations/use-auth-mutations";
+import { dashboardPathFor } from "@/hooks/use-auth-session";
 import { getUserErrorMessage } from "@domain/errors/app-error";
 import { appAlert } from "@/presentation/lib/swal";
 import { ArrowRight } from "lucide-react";
@@ -106,22 +107,7 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
       console.log("📤 [LOGIN] Données envoyées:", loginData);
 
       const response = await loginMutation.mutateAsync(loginData);
-      const userRole = response.user.role.toUpperCase();
-
-      if (userRole === "MERCHANT" || userRole === "COMMERCANT") {
-        console.log(
-          "🔄 [LOGIN] Redirection vers le tableau de bord commerçant"
-        );
-        navigate("/merchant-dashboard");
-      } else if (userRole === "SUPPLIER" || userRole === "FOURNISSEUR") {
-        console.log(
-          "🔄 [LOGIN] Redirection vers le tableau de bord fournisseur"
-        );
-        navigate("/supplier-dashboard");
-      } else {
-        console.log("🔄 [LOGIN] Redirection vers le tableau de bord client");
-        navigate("/client-dashboard");
-      }
+      navigate(dashboardPathFor(response.user.role));
 
       if (onClose) {
         onClose();

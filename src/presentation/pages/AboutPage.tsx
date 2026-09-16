@@ -16,9 +16,9 @@ import {
   Zap
 } from 'lucide-react';
 
-const AboutPage = () => {
+const AboutPage = ({ embedded = false }: { embedded?: boolean }) => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={embedded ? "overflow-hidden rounded-[18px] bg-white ring-1 ring-slate-100" : "min-h-screen bg-gray-50"}>
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-orange-500 to-orange-400 text-white">
         <div className="container mx-auto px-4 py-20">

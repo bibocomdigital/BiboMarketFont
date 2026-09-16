@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cancelOrder, updateOrderStatus } from "@/services/orderServices";
-import { orderKeys } from "@/lib/query-keys";
+import { merchantKeys, orderKeys } from "@/lib/query-keys";
 
 export function useCancelOrderMutation() {
   const queryClient = useQueryClient();
@@ -23,6 +23,7 @@ export function useUpdateOrderStatusMutation() {
     onSuccess: (_data, { orderId }) => {
       queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: merchantKeys.all });
     },
   });
 }

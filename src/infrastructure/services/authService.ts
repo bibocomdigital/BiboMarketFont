@@ -1,3 +1,7 @@
+import { apiErrorMessage, unwrapAuthSession, unwrapList, unwrapRecord } from "../api/api-envelope";
+import { parseApiError } from "../api/fetch-error";
+import { AppError } from "@domain/errors/app-error";
+
 // Configuration de l'API
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3007/api";
 
@@ -8,14 +12,15 @@ export const CLOUDINARY_BASE_URL = "https://res.cloudinary.com/yourdomain"; // �
 export enum UserRole { 
   CLIENT = 'CLIENT', 
   MERCHANT = 'MERCHANT', 
-  SUPPLIER = 'SUPPLIER' 
+  SUPPLIER = 'SUPPLIER',
+  ADMIN = 'ADMIN',
 }
 
-// Labels à afficher pour chaque rôle
 export const USER_ROLE_LABELS: Record<UserRole, string> = { 
   [UserRole.CLIENT]: 'Client', 
   [UserRole.MERCHANT]: 'Commerçant', 
-  [UserRole.SUPPLIER]: 'Fournisseur' 
+  [UserRole.SUPPLIER]: 'Fournisseur',
+  [UserRole.ADMIN]: 'Administrateur',
 };
 
 // Interface pour les données utilisateur
@@ -32,6 +37,7 @@ export interface User {
   city?: string;
   department?: string;
   commune?: string;
+  currency?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -43,6 +49,13 @@ export interface AuthContextType {
   login: (credentials: { email: string; password: string }) => Promise<void>;
   logout: () => void;
   loading: boolean;
+}
+
+export const AUTH_CHANGED_EVENT = "bibo-auth-changed";
+
+export function notifyAuthChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
 /**
@@ -104,11 +117,11 @@ export const checkEmailExists = async (email: string): Promise<{ exists: boolean
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.message || 'Erreur lors de la vérification de l\'email');
+      throw new Error(apiErrorMessage(errorData, 'Erreur lors de la vérification de l\'email'));
     }
 
-    const data = await response.json();
-    return data;
+    const data = unwrapRecord(await response.json());
+    return data as { exists: boolean };
   } catch (error) {
     console.error('Erreur lors de la vérification de l\'email:', error);
     throw error;
@@ -163,8 +176,11 @@ export const registerUser = async (formData: FormData): Promise<{
       throw new Error(errorData.message || 'Erreur lors de l\'inscription');
     }
 
-    const data = await response.json();
-    return data;
+    const data = unwrapRecord(await response.json());
+    return {
+      message: String(data.message ?? 'Inscription réussie'),
+      email: String(data.email ?? payload.email),
+    };
   } catch (error) {
     console.error('Erreur lors de l\'inscription:', error);
     throw error;
@@ -210,8 +226,8 @@ export const registerUser = async (formData: FormData): Promise<{
         return;
       }
 
-      const data = await response.json();
-      setPhoneExists(data.exists || false);
+      const data = unwrapRecord(await response.json());
+      setPhoneExists(Boolean(data.exists));
     } catch (error) {
       console.error("Erreur lors de la vérification du téléphone :", error);
       setPhoneExists(false);
@@ -264,12 +280,16 @@ export const verifyCode = async (email: string, verificationCode: string): Promi
       throw new Error(errorData.message || 'Erreur lors de la vérification du code');
     }
 
-    const data = await response.json();
-    console.log('✅ [API] Vérification réussie:', data);
-    console.log('👤 [API] Utilisateur vérifié:', data.user.email);
-    console.log('👤 [API] Rôle de l\'utilisateur:', data.user.role);
+    const payload = unwrapRecord(await response.json());
+    const user = payload.user as User;
+    console.log('✅ [API] Vérification réussie:', payload);
+    console.log('👤 [API] Utilisateur vérifié:', user?.email);
+    console.log('👤 [API] Rôle de l\'utilisateur:', user?.role);
     
-    return data;
+    return {
+      message: String(payload.message ?? 'Vérification réussie'),
+      user,
+    };
   } catch (error) {
     console.error('❌ [API] Erreur lors de la vérification du code:', error);
     throw error;
@@ -350,18 +370,18 @@ export const login = async (credentials: { email?: string; password: string, pho
     if (!response.ok) {
       const errorData = await response.json();
       console.error('❌ [API] Erreur de connexion:', errorData);
-      throw new Error(errorData.message || 'Erreur lors de la connexion');
+      throw new Error(apiErrorMessage(errorData, 'Erreur lors de la connexion'));
     }
 
-    const data = await response.json();
-    console.log('✅ [API] Connexion réussie pour:', data.user.email);
-    console.log('👤 [API] Rôle de l\'utilisateur:', data.user.role);
+    const { token, user } = unwrapAuthSession<User>(await response.json());
+    console.log('✅ [API] Connexion réussie pour:', user.email);
+    console.log('👤 [API] Rôle de l\'utilisateur:', user.role);
     
-    // Stocker le token dans le localStorage
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    notifyAuthChanged();
     
-    return data;
+    return { token, user };
   } catch (error) {
     console.error('❌ [API] Erreur lors de la connexion:', error);
     throw error;
@@ -373,10 +393,19 @@ export const login = async (credentials: { email?: string; password: string, pho
  */
 export const logout = (): void => {
   try {
-    console.log('🔄 [API] Déconnexion de l\'utilisateur');
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (token) {
+      void fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }).catch(() => undefined);
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    console.log('✅ [API] Utilisateur déconnecté avec succès');
+    notifyAuthChanged();
   } catch (error) {
     console.error('❌ [API] Erreur lors de la déconnexion:', error);
   }
@@ -419,102 +448,116 @@ export const getUser = (): User | null => {
   return getCurrentUser();
 };
 
+function asProfileUser(raw: Record<string, unknown>): ProfileData {
+  const nested = raw.user;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    return nested as ProfileData;
+  }
+  return raw as ProfileData;
+}
+
+function persistProfileUser(user: ProfileData) {
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  localStorage.setItem("user", JSON.stringify({ ...currentUser, ...user }));
+  notifyAuthChanged();
+}
+
 /**
  * Récupère le profil utilisateur détaillé
  */
 export const getUserProfile = async (): Promise<ProfileData> => {
-  try {
-    console.log('🔄 [API] Récupération du profil utilisateur');
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('❌ [API] Tentative de récupération du profil sans token');
-      throw new Error('Non authentifié');
-    }
-    
-    const response = await fetch(`${API_URL}/auth/profile`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    console.log('📊 [API] Statut de la réponse du profil:', response.status);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [API] Erreur de récupération du profil:', errorData);
-      throw new Error(errorData.message || 'Erreur lors de la récupération du profil');
-    }
-
-    const data = await response.json();
-    console.log('✅ [API] Profil utilisateur récupéré avec succès:', data);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ [API] Erreur lors de la récupération du profil:', error);
-    throw error;
+  const token = localStorage.getItem("token");
+  if (!token) {
+    throw new AppError("Votre session a expiré. Veuillez vous reconnecter.", "UNAUTHORIZED", 401);
   }
+
+  const response = await fetch(`${API_URL}/auth/profile`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur lors de la récupération du profil");
+  }
+
+  return asProfileUser(unwrapRecord(await response.json()));
 };
 
 /**
  * Met à jour le profil utilisateur
  */
 export const updateUserProfile = async (profileData: ProfileData): Promise<ProfileData> => {
-  try {
-    console.log('🔄 [API] Mise à jour du profil utilisateur');
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('❌ [API] Tentative de mise à jour du profil sans token');
-      throw new Error('Non authentifié');
-    }
-    
-    // Utiliser FormData pour pouvoir envoyer des fichiers
+  const token = localStorage.getItem("token");
+  if (!token) {
+    throw new AppError("Votre session a expiré. Veuillez vous reconnecter.", "UNAUTHORIZED", 401);
+  }
+
+  const hasFile = profileData.photo instanceof File;
+  let response: Response;
+
+  if (hasFile) {
     const formData = new FormData();
-    
-    // Ajouter les champs du profil au FormData
-    // Object.entries(profileData).forEach(([key, value]) => {
-    //   if (value !== undefined) {
-    //     formData.append(key, value as string | Blob);
-    //   }
-    // });
-    
-    // Log des données à envoyer (sans le fichier)
-    // const logData = { ...profileData };
-    // if (logData.photo) {
-    //   logData.photo = '[FILE]' as any;
-    // }
-    // console.log('📤 [API] Données de profil à envoyer:', logData);
-    
-    const response = await fetch(`${API_URL}/users/profile`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+    Object.entries(profileData).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      if (key === "photo" && value instanceof File) {
+        formData.append("photo", value);
+        return;
+      }
+      formData.append(key, String(value));
+    });
+    response = await fetch(`${API_URL}/auth/profile`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
-
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Erreur lors de la mise à jour du profil');
-    }
-
-    const data = await response.json();
-    console.log('✅ [API] Profil utilisateur mis à jour avec succès:', data);
-    
-    // Mettre à jour l'utilisateur stocké localement si nécessaire
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const updatedUser = { ...currentUser, ...data };
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    
-    return data;
-  } catch (error) {
-    console.error('❌ [API] Erreur lors de la mise à jour du profil:', error);
-    throw error;
+  } else {
+    const { photo: _photo, id: _id, ...rest } = profileData;
+    response = await fetch(`${API_URL}/auth/profile`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(rest),
+    });
   }
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Erreur lors de la mise à jour du profil");
+  }
+
+  const user = asProfileUser(unwrapRecord(await response.json()));
+  persistProfileUser(user);
+  return user;
+};
+
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<{ message?: string }> => {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    throw new AppError("Votre session a expiré. Veuillez vous reconnecter.", "UNAUTHORIZED", 401);
+  }
+
+  const response = await fetch(`${API_URL}/auth/change-password`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Impossible de changer le mot de passe");
+  }
+
+  const payload = unwrapRecord(await response.json());
+  return { message: typeof payload.message === "string" ? payload.message : "Mot de passe mis à jour." };
 };
 
 export const requestPasswordReset = async (email: string): Promise<{ message?: string }> => {
@@ -564,4 +607,26 @@ export const getUserById = async (userId: string | number) => {
   }
   const data = await response.json();
   return data.data || data;
+};
+
+export const getAdminUsers = async (): Promise<User[]> => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  if (!token) {
+    throw new Error("Non authentifié");
+  }
+
+  const response = await fetch(`${API_URL}/auth/all`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const raw = await response.json();
+  if (!response.ok) {
+    throw new Error(apiErrorMessage(raw, "Impossible de charger les utilisateurs"));
+  }
+
+  return unwrapList(raw, ["users"]) as User[];
 };

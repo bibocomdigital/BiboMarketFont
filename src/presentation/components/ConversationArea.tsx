@@ -33,6 +33,7 @@ const ConversationArea = ({
   
   // Configuration
   isDarkMode = true,
+  variant = "default",
   
   // Options d'édition
   editingMessage = null,
@@ -44,6 +45,7 @@ const ConversationArea = ({
   canModifyMessage = null,
   handleDeleteMessage = null,
 }) => {
+  const merchant = variant === "merchant";
   const messageEndRef = useRef(null);
   const editInputRef = useRef(null);
 
@@ -75,8 +77,10 @@ const ConversationArea = ({
       )}
       
       {/* Zone des messages */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}
-           style={{backgroundImage: isDarkMode ? "none" : "url('/api/placeholder/400/400')",
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${
+          merchant ? "bg-bibocom-light" : isDarkMode ? "bg-gray-900" : "bg-gray-100"
+        }`}
+           style={merchant ? undefined : {backgroundImage: isDarkMode ? "none" : "url('/api/placeholder/400/400')",
                   backgroundSize: "contain",
                   backgroundRepeat: "repeat",
                   opacity: isDarkMode ? 1 : 0.95}}>
@@ -183,12 +187,16 @@ const ConversationArea = ({
                       <div 
                         className={`rounded-lg p-3 ${
                           isCurrentUser 
-                            ? isDarkMode 
-                              ? 'bg-green-600 text-white rounded-tr-none' // Message envoyé (dark)
-                              : 'bg-green-500 text-white rounded-tr-none' // Message envoyé (light)
-                            : isDarkMode 
-                              ? 'bg-gray-700 text-white rounded-tl-none' // Message reçu (dark)
-                              : 'bg-white text-gray-800 rounded-tl-none' // Message reçu (light)
+                            ? merchant
+                              ? 'bg-bibocom-primary text-white rounded-tr-none'
+                              : isDarkMode 
+                              ? 'bg-green-600 text-white rounded-tr-none'
+                              : 'bg-green-500 text-white rounded-tr-none'
+                            : merchant
+                              ? 'bg-white text-bibocom-primary rounded-tl-none shadow-sm'
+                              : isDarkMode 
+                              ? 'bg-gray-700 text-white rounded-tl-none'
+                              : 'bg-white text-gray-800 rounded-tl-none'
                         } relative`}
                       >
                         {/* Indicateur de suppression en cours */}
@@ -206,11 +214,11 @@ const ConversationArea = ({
                         
                         {/* Message audio (si présent) */}
                         {(msg.audio || msg.isVoiceMessage) && (
-                          <div className={`flex items-center gap-2 py-1 ${
+                          <div                             className={`flex items-center gap-2 py-1 ${
                             isCurrentUser 
-                              ? isDarkMode 
-                                ? 'text-green-100' 
-                                : 'text-white' 
+                              ? merchant || !isDarkMode
+                                ? 'text-white' 
+                                : 'text-green-100'
                               : isDarkMode 
                                 ? 'text-gray-300' 
                                 : 'text-gray-600'
@@ -220,7 +228,9 @@ const ConversationArea = ({
                               size="icon"
                               className={`h-8 w-8 rounded-full ${
                                 isCurrentUser 
-                                  ? isDarkMode
+                                  ? merchant
+                                    ? 'text-white hover:bg-white/10'
+                                    : isDarkMode
                                     ? 'text-green-200 hover:bg-green-700'
                                     : 'text-white hover:bg-green-600' 
                                   : isDarkMode
@@ -235,7 +245,9 @@ const ConversationArea = ({
                                 <div 
                                   className={`h-1 rounded-full ${
                                     isCurrentUser 
-                                      ? isDarkMode 
+                                      ? merchant
+                                        ? 'bg-bibocom-secondary'
+                                        : isDarkMode 
                                         ? 'bg-green-400' 
                                         : 'bg-green-300' 
                                       : isDarkMode 
@@ -361,9 +373,9 @@ const ConversationArea = ({
                         {/* Horodatage et statut de lecture */}
                         <div className={`text-xs flex justify-end items-center mt-1 ${
                           isCurrentUser 
-                            ? isDarkMode 
-                              ? 'text-green-100' 
-                              : 'text-green-100' 
+                            ? merchant
+                              ? 'text-white/70'
+                              : 'text-green-100'
                             : isDarkMode 
                               ? 'text-gray-300' 
                               : 'text-gray-500'
@@ -380,7 +392,9 @@ const ConversationArea = ({
                                 isDarkMode 
                                   ? 'bg-gray-700 text-white' 
                                   : isCurrentUser 
-                                    ? 'bg-green-600 text-white'
+                                    ? merchant
+                                      ? 'bg-bibocom-primary text-white'
+                                      : 'bg-green-600 text-white'
                                     : 'bg-gray-200 text-gray-600'
                               }`}
                               onClick={(e) => handleMessageClick(e, msg.id)}
@@ -527,7 +541,9 @@ const ConversationArea = ({
 
       {/* Formulaire pour envoyer un message */}
       <div className={`border-t p-4 ${
-        isDarkMode 
+        merchant
+          ? 'border-slate-100 bg-white'
+          : isDarkMode 
           ? 'border-gray-800 bg-gray-800' 
           : 'border-gray-200 bg-gray-100'
       }`}>
@@ -538,7 +554,9 @@ const ConversationArea = ({
             onChange={(e) => setMessageText(e.target.value)}
             placeholder="Votre message..."
             className={`flex-1 p-3 rounded-full focus:outline-none focus:ring-1 ${
-              isDarkMode 
+              merchant
+                ? 'bg-white text-bibocom-primary focus:ring-bibocom-secondary'
+                : isDarkMode 
                 ? 'bg-gray-700 text-white focus:ring-green-500' 
                 : 'bg-white text-gray-800 focus:ring-green-500'
             }`}
@@ -582,7 +600,9 @@ const ConversationArea = ({
             type="submit"
             variant="ghost"
             className={`ml-2 ${
-              isDarkMode 
+              merchant
+                ? 'text-bibocom-accent hover:text-bibocom-accent/80'
+                : isDarkMode 
                 ? 'text-green-400 hover:text-green-300' 
                 : 'text-green-600 hover:text-green-700'
             }`}

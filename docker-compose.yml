@@ -9,26 +9,56 @@ services:
     ports:
       # Next.js écoute sur 8080 (voir package.json).
       - '3006:8080'
-      # 5555 est souvent pris par l'émulateur Android (qemu/adb) sur l'hôte.
-      - '5556:5555'
     volumes:
       - .:/app
       - /app/node_modules
       # Évite la boucle HMR : les écritures dans .next ne doivent pas retrigger le watcher du bind mount.
       - /app/.next
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
     environment:
       - WATCHPACK_POLLING=true
-      # Même API que le mobile : BiboMarketBack publié sur l'hôte :3007
-      - API_URL=http://host.docker.internal:3007/api
-      - NEXT_PUBLIC_API_URL=http://localhost:3007/api
+      # Base du backend (avec préfixe /api) utilisée par les rewrites Next.js côté serveur.
+      - API_URL=http://backend:3000/api
+      - NEXT_PUBLIC_API_URL=http://localhost:3005/api
     command: ["npm", "run", "dev"]
+    depends_on:
+      - backend
     networks:
       - bibomarket-network
 
-  # L'API canonique est BiboMarketBack (port hôte 3007), déjà lancée à part.
-  # Ne plus démarrer l'image bibomarket-backend-develop (port 3005, Prisma cloud).
+  backend:
+    image: bibocomdigital/bibomarket-backend-develop:latest
+    env_file:
+      - .env.backend
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - '3005:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    networks:
+      - bibomarket-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-bibomarket
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    networks:
+      - bibomarket-network
+    volumes:
+      - redis_data_market:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   postgres:
     image: postgres:17
@@ -53,6 +83,8 @@ services:
 
 volumes:
   postgres_data_market:
+    driver: local
+  redis_data_market:
     driver: local
 
 networks:

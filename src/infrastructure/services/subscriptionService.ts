@@ -4,6 +4,8 @@
 
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { unwrapPaged } from '../api/api-envelope';
+import { parseApiError } from '../api/fetch-error';
 
 // Types pour les abonnements
 export interface User {
@@ -107,14 +109,20 @@ export const getUserFollowers = async (
     );
     
     if (!response.ok) {
-      const errorData = await response.json();
-      return handleApiError(errorData, 'Erreur lors de la récupération des abonnés');
+      throw await parseApiError(response, 'Erreur lors de la récupération des abonnés');
     }
-    
+
     const data = await response.json();
-    console.log(`✅ [SUBSCRIPTION] Abonnés récupérés avec succès: ${data.followers.length}`);
-    
-    return data;
+    const { items, pagination } = unwrapPaged<Follower>(data, 'followers', { page, limit });
+    return {
+      followers: items,
+      pagination: {
+        total: pagination.total,
+        page: pagination.page,
+        limit: pagination.limit,
+        pages: pagination.totalPages,
+      },
+    };
   } catch (error) {
     console.error('❌ [SUBSCRIPTION] Erreur:', error);
     throw error;
@@ -142,14 +150,20 @@ export const getUserFollowing = async (
     );
     
     if (!response.ok) {
-      const errorData = await response.json();
-      return handleApiError(errorData, 'Erreur lors de la récupération des abonnements');
+      throw await parseApiError(response, 'Erreur lors de la récupération des abonnements');
     }
-    
+
     const data = await response.json();
-    console.log(`✅ [SUBSCRIPTION] Abonnements récupérés avec succès: ${data.following.length}`);
-    
-    return data;
+    const { items, pagination } = unwrapPaged<Follower>(data, 'following', { page, limit });
+    return {
+      following: items,
+      pagination: {
+        total: pagination.total,
+        page: pagination.page,
+        limit: pagination.limit,
+        pages: pagination.totalPages,
+      },
+    };
   } catch (error) {
     console.error('❌ [SUBSCRIPTION] Erreur:', error);
     throw error;

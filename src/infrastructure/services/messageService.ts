@@ -5,6 +5,7 @@
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
 import type { ApiError } from './configService';
+import { unwrapRecord } from '../api/api-envelope';
 import { User } from './authService';
 
 // Types pour les messages
@@ -365,36 +366,20 @@ export const markAllAsRead = async (partnerId: number): Promise<MarkAsReadRespon
  * Récupère le nombre de messages non lus
  * @returns Nombre de messages non lus
  */
-export const getUnreadCount = async (): Promise<UnreadCountResponse> => {
+export const getUnreadCount = async (): Promise<number> => {
+  const token = getAuthToken();
+  if (!token) return 0;
+
   try {
-    console.log(`🔄 [MESSAGE] Récupération du nombre de messages non lus`);
-    
-    // Récupérer le token d'authentification
-    const token = getAuthToken();
-    if (!token) {
-      throw new Error('Vous devez être connecté pour accéder à vos messages non lus');
-    }
-    
-    // Appeler l'API pour récupérer le nombre de messages non lus
-    const response = await fetch(
-      `${backendUrl}/messages/unread/count`,
-      {
-        headers: getAuthHeaders()
-      }
-    );
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      return handleApiError(errorData, 'Erreur lors de la récupération du nombre de messages non lus');
-    }
-    
-    const data = await response.json();
-    console.log(`✅ [MESSAGE] Nombre de messages non lus récupéré: ${data.unreadCount}`);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ [MESSAGE] Erreur:', error);
-    throw error;
+    const response = await fetch(`${backendUrl}/messages/unread/count`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) return 0;
+    const payload = unwrapRecord(await response.json());
+    const count = Number(payload.unreadCount ?? 0);
+    return Number.isFinite(count) && count > 0 ? count : 0;
+  } catch {
+    return 0;
   }
 };
 
@@ -427,9 +412,10 @@ export const searchMessages = async (query: string): Promise<SearchMessagesRespo
     }
     
     const data = await response.json();
-    console.log(`✅ [MESSAGE] ${data.data.length} message(s) trouvé(s)`);
+    const hits = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+    console.log(`✅ [MESSAGE] ${hits.length} message(s) trouvé(s)`);
     
-    return data;
+    return { success: true, data: hits };
   } catch (error) {
     console.error('❌ [MESSAGE] Erreur:', error);
     throw error;

@@ -28,13 +28,21 @@ export interface Shop {
   verifiedBadge: boolean;
 }
 
+export interface ProductCategoryRef {
+  id: number;
+  name: string;
+  categorieShopId?: number;
+}
+
 export interface Product {
   id: number;
   name: string;
   description: string;
   price: number;
   stock: number;
-  category: string;
+  category?: string | ProductCategoryRef;
+  categorieProdId?: number;
+  categorieProd?: ProductCategoryRef;
   status: 'DRAFT' | 'PUBLISHED';
   videoUrl?: string;
   shopId: number;
@@ -48,6 +56,19 @@ export interface Product {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProductCategory {
+  id: number;
+  name: string;
+  categorieShopId?: number;
+  shopCategory?: {
+    id: number;
+    name: string;
+  };
+  _count?: {
+    products: number;
+  };
 }
 
 export interface Pagination {
@@ -175,9 +196,14 @@ export const getAllProducts = async (
     if (additionalFilters.status) url += `&status=${additionalFilters.status}`;
     
     console.log(`🔄 [PRODUCT] URL de requête: ${url}`);
-    
-    // Appeler l'API pour récupérer tous les produits
-    const response = await fetch(url);
+
+    const headers: HeadersInit = {};
+    const token = getAuthToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, { headers });
     
     if (!response.ok) {
       throw await parseApiError(response, 'Erreur lors de la récupération des produits');
@@ -546,21 +572,19 @@ export const getFeaturedProducts = async (limit: number = 10): Promise<Product[]
 };
 
 /**
- * Récupère toutes les catégories de produits
- * @returns {Promise<string[]>} La liste des catégories
+ * Récupère toutes les catégories de produits (CategorieProd + compteur).
  */
-export const getProductCategories = async (): Promise<string[]> => {
+export const getProductCategories = async (): Promise<ProductCategory[]> => {
   try {
     console.log('🔄 [PRODUCT] Récupération des catégories de produits');
     
-    // Appeler l'API pour récupérer les catégories
     const response = await fetch(`${backendUrl}/produit/categories`);
     
     if (!response.ok) {
       throw await parseApiError(response, 'Erreur lors de la récupération des catégories');
     }
     
-    const categories = unwrapList(await response.json(), ['categories']) as string[];
+    const categories = unwrapList(await response.json(), ['categories']) as ProductCategory[];
     console.log('✅ [PRODUCT] Catégories récupérées avec succès:', categories.length);
     
     return categories;

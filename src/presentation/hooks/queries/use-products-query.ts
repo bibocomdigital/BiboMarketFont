@@ -4,18 +4,40 @@ import { getProductComments } from "@/services/commentService";
 import { productKeys } from "@/lib/query-keys";
 import { withTimeout } from "@infrastructure/api/with-timeout";
 
-export function useProductsQuery(page: number, limit: number) {
+export function useProductsQuery(
+  page: number,
+  limit: number,
+  filters?: {
+    categoryId?: number;
+    searchTerm?: string;
+    status?: string;
+    enabled?: boolean;
+  }
+) {
   return useQuery({
-    queryKey: productKeys.list({ page, limit }),
-    queryFn: () => withTimeout(getAllProducts(page, limit)),
+    queryKey: productKeys.list({
+      page,
+      limit,
+      category: filters?.categoryId,
+      search: filters?.searchTerm,
+      status: filters?.status,
+    }),
+    queryFn: () =>
+      withTimeout(
+        getAllProducts(page, limit, filters?.categoryId, filters?.searchTerm ?? "", {
+          status: filters?.status,
+        })
+      ),
+    enabled: filters?.enabled ?? true,
     staleTime: 30_000,
   });
 }
 
-export function useProductCategoriesQuery() {
+export function useProductCategoriesQuery(enabled = true) {
   return useQuery({
     queryKey: productKeys.categories(),
     queryFn: () => withTimeout(getProductCategories()),
+    enabled,
     staleTime: 10 * 60_000,
   });
 }

@@ -22,44 +22,14 @@ import {
 } from '@/services/commentService';
 import { Loader, Heart, MessageCircle, X, ChevronLeft, ChevronRight, ThumbsDown, Search, Filter } from 'lucide-react';
 import { ServiceUnavailableState } from '@/components/feedback/ServiceUnavailableState';
-
-// Implémentation locale de isUserLoggedIn pour éviter les problèmes d'importation
-const isUserLoggedIn = (): boolean => {
-  try {
-    // Vérifier si l'utilisateur est connecté
-    const userStr = localStorage.getItem('user');
-    if (!userStr) {
-      return false;
-    }
-    
-    // Vérifier si le token existe
-    const token = localStorage.getItem('token');
-    if (!token) {
-      return false;
-    }
-    
-    // Vérifier si le token est expiré
-    try {
-      // Décodage simpliste du token JWT pour vérifier la date d'expiration
-      // Note: ceci est une vérification basique, la validation complète se fait côté serveur
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const expirationTime = payload.exp * 1000; // convertir en millisecondes
-      
-      if (Date.now() >= expirationTime) {
-        return false;
-      }
-    } catch (err) {
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('❌ [LIKES] Erreur lors de la vérification de la connexion:', error);
-    return false;
-  }
-};
+import { useAuthSession } from '@/hooks/use-auth-session';
+import { useSearchParams } from 'react-router-dom';
 
 const ProductsGrid = () => {
+  const { isAuthenticated: isLoggedIn } = useAuthSession();
+  const [searchParams] = useSearchParams();
+  const categoryFromUrl = searchParams.get('category');
+  const qFromUrl = searchParams.get('q') || '';
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -74,8 +44,10 @@ const ProductsGrid = () => {
   const [error, setError] = useState<string | null>(null);
   
   // États pour le filtrage
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<number | undefined>(undefined);
+  const [searchTerm, setSearchTerm] = useState(qFromUrl);
+  const [selectedCategory, setSelectedCategory] = useState<number | undefined>(
+    categoryFromUrl ? Number(categoryFromUrl) : undefined
+  );
   const [showFilters, setShowFilters] = useState(false);
   
   // États pour la modal et le produit sélectionné
@@ -94,10 +66,7 @@ const ProductsGrid = () => {
   const [likesCount, setLikesCount] = useState<{[key: number]: number}>({});
   const [dislikesCount, setDislikesCount] = useState<{[key: number]: number}>({});
   
-  // Stocker l'état d'authentification dans un état React pour éviter les appels répétés
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  
-  // États pour gérer les commentaires
+  // États pour gérer les likes/dislikes
   const [comments, setComments] = useState<any[]>([]);
   const [commentsPagination, setCommentsPagination] = useState({
     total: 0,
@@ -110,6 +79,10 @@ const ProductsGrid = () => {
   const [replyText, setReplyText] = useState('');
   const [loadingComments, setLoadingComments] = useState(false);
   const [cartMessages, setCartMessages] = useState<{[key: number]: boolean}>({});
+
+  useEffect(() => {
+    if (qFromUrl) setSearchTerm(qFromUrl);
+  }, [qFromUrl]);
 
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
   
@@ -148,20 +121,15 @@ const ProductsGrid = () => {
     }
   };
 
-  // Vérifier l'état d'authentification une seule fois au chargement et lors des changements pertinents
   useEffect(() => {
-    const checkAuth = () => {
-      const isAuth = isUserLoggedIn();
-      setIsLoggedIn(isAuth);
-    };
-    
-    checkAuth();
-    
-    // Optionnel: configurer un interval pour vérifier périodiquement (utile pour détecter les tokens expirés)
-    const authInterval = setInterval(checkAuth, 60000); // Vérifier toutes les minutes
-    
-    return () => clearInterval(authInterval);
-  }, []);
+    const next = categoryFromUrl ? Number(categoryFromUrl) : undefined;
+    setSelectedCategory(Number.isNaN(next as number) ? undefined : next);
+    setPagination((prev) => ({
+      ...prev,
+      page: 1,
+      category: Number.isNaN(next as number) ? undefined : next,
+    }));
+  }, [categoryFromUrl]);
 
   const rawProducts = productsQuery.data?.products ?? [];
   const filteredProducts = rawProducts.filter((product) => {

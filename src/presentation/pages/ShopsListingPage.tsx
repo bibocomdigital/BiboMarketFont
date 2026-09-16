@@ -43,7 +43,8 @@ const ShopsListingPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const { data: shops = [], isPending, isError, isFetching, refetch } = useShopsQuery();
+  const { data: shopsData, isPending, isError, isFetching, refetch } = useShopsQuery();
+  const shops = Array.isArray(shopsData) ? shopsData : [];
   const [filteredShops, setFilteredShops] = useState<Shop[]>([]);
   const isLoading = isPending && shops.length === 0;
   const isUnavailable = isError && shops.length === 0;
@@ -64,9 +65,23 @@ const ShopsListingPage = () => {
     hasProducts: 'all',
   });
 
+  const categoryShopIdParam = searchParams.get('categorieShopId');
+  const categoryShopId = categoryShopIdParam ? Number(categoryShopIdParam) : NaN;
+
   // Filtrer et trier les boutiques
   useEffect(() => {
     let filtered = [...shops];
+
+    if (!Number.isNaN(categoryShopId)) {
+      const hasCategoryField = shops.some(
+        (shop) => shop.categorieShopId != null || shop.categorieShop?.id != null
+      );
+      if (hasCategoryField) {
+        filtered = filtered.filter(
+          (shop) => (shop.categorieShopId ?? shop.categorieShop?.id) === categoryShopId
+        );
+      }
+    }
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
@@ -102,17 +117,21 @@ const ShopsListingPage = () => {
     });
 
     setFilteredShops(filtered);
+  }, [shops, searchTerm, filters, categoryShopId]);
 
-    if (currentPage > 1) setCurrentPage(1);
-  }, [shops, searchTerm, filters]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters, categoryShopId]);
 
-  // Mise à jour des URL params
+  // Mise à jour des URL params (sans recharger la page si l'URL n'a pas changé)
   useEffect(() => {
     const params = new URLSearchParams();
     if (searchTerm) params.set('search', searchTerm);
     if (currentPage > 1) params.set('page', currentPage.toString());
+    if (categoryShopIdParam) params.set('categorieShopId', categoryShopIdParam);
+    if (params.toString() === searchParams.toString()) return;
     setSearchParams(params);
-  }, [searchTerm, currentPage, setSearchParams]);
+  }, [searchTerm, currentPage, categoryShopIdParam, searchParams, setSearchParams]);
 
   const paginationInfo: PaginationInfo = {
     currentPage,

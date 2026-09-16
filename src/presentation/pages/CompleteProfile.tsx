@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { UserRole, USER_ROLE_LABELS } from '@/types/user';
+import { dashboardPathFor } from '@/hooks/use-auth-session';
 import CountrySelect from '@/components/forms/register/CountrySelect';
 import { Country } from '@/data/countries';
 import { MapPin, UserCheck, ShoppingBag, ShoppingCart, User, Edit, Check } from 'lucide-react';
@@ -179,14 +180,7 @@ const CompleteProfile = () => {
         description: "Votre profil a été mis à jour avec succès",
       });
       
-      // Redirect to appropriate dashboard based on role
-      if (values.role === UserRole.MERCHANT) {
-        navigate('/merchant-dashboard');
-      } else if (values.role === UserRole.SUPPLIER) {
-        navigate('/supplier-dashboard');
-      } else {
-        navigate('/client-dashboard');
-      }
+      navigate(dashboardPathFor(values.role));
     } catch (error) {
       console.error('🔴 [COMPLETE_PROFILE] Error updating profile:', error);
       toast({
@@ -368,7 +362,9 @@ const CompleteProfile = () => {
                                 value={field.value}
                                 className="grid grid-cols-1 md:grid-cols-3 gap-4"
                               >
-                                {Object.values(UserRole).map((role) => (
+                                {Object.values(UserRole)
+                                  .filter((role) => role !== UserRole.ADMIN)
+                                  .map((role) => (
                                   <FormItem key={role} className="flex items-start space-x-2 space-y-0 p-4 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
                                     <FormControl>
                                       <RadioGroupItem value={role} className="mt-1" />

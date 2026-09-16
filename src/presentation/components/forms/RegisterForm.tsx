@@ -13,6 +13,7 @@ import {
   UserRole,
 } from "@/services/authService";
 import { appAlert } from "@/presentation/lib/swal";
+import { dashboardPathFor } from "@/hooks/use-auth-session";
 
 
 const formSchema = z
@@ -195,15 +196,7 @@ const RegisterForm = ({
           email: data.email,
           password: data.password,
         });
-        const userRole = session.user.role.toUpperCase();
-
-        if (userRole === "MERCHANT" || userRole === "COMMERCANT") {
-          navigate("/merchant-dashboard");
-        } else if (userRole === "SUPPLIER" || userRole === "FOURNISSEUR") {
-          navigate("/supplier-dashboard");
-        } else {
-          navigate("/client-dashboard");
-        }
+        navigate(dashboardPathFor(session.user.role));
       } catch {
         navigate("/login", {
           state: { initialEmail: data.email },

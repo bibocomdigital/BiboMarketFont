@@ -165,6 +165,11 @@ export const pageSeo = {
     path: "/supplier-dashboard",
     robots: "private",
   }),
+  adminDashboard: buildPageMetadata({
+    title: "Espace administrateur",
+    path: "/admin-dashboard",
+    robots: "private",
+  }),
   verifyCode: buildPageMetadata({
     title: "Vérification du compte",
     path: "/verify-code",

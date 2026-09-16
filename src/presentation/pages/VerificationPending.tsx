@@ -6,6 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Progress } from "@/components/ui/progress";
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, Loader } from 'lucide-react';
+import { dashboardPathFor } from '@/hooks/use-auth-session';
 
 const VerificationPending = () => {
   const [progress, setProgress] = useState(0);
@@ -49,14 +50,7 @@ const VerificationPending = () => {
         description: "Votre compte a été vérifié avec succès"
       });
       
-      // Rediriger selon le rôle
-      if (userRole === 'commercant' || userRole === 'MERCHANT') {
-        navigate('/merchant-dashboard');
-      } else if (userRole === 'fournisseur' || userRole === 'SUPPLIER') {
-        navigate('/supplier-dashboard'); 
-      } else {
-        navigate('/client-dashboard');
-      }
+      navigate(dashboardPathFor(userRole));
     }, 5000); // 5 secondes
     
     return () => {

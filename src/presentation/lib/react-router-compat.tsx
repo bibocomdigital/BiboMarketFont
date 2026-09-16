@@ -48,7 +48,7 @@ export function readNavState(): unknown {
 export function useNavigate() {
   const router = useRouter();
 
-  return (to: To, options?: { replace?: boolean; state?: unknown }) => {
+  return React.useCallback((to: To, options?: { replace?: boolean; state?: unknown }) => {
     if (typeof to === "number") {
       router.back();
       return;
@@ -58,7 +58,7 @@ export function useNavigate() {
     const href = resolveTo(to);
     if (options?.replace) router.replace(href);
     else router.push(href);
-  };
+  }, [router]);
 }
 
 export function useLocation() {
@@ -82,24 +82,29 @@ export function useSearchParams() {
   const searchParams = useNextSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const currentQs = searchParams.toString();
 
-  const setSearchParams = (
-    next:
-      | URLSearchParams
-      | Record<string, string>
-      | ((prev: URLSearchParams) => URLSearchParams)
-  ) => {
-    let params: URLSearchParams;
-    if (typeof next === "function") {
-      params = next(new URLSearchParams(searchParams.toString()));
-    } else if (next instanceof URLSearchParams) {
-      params = next;
-    } else {
-      params = new URLSearchParams(next);
-    }
-    const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
-  };
+  const setSearchParams = React.useCallback(
+    (
+      next:
+        | URLSearchParams
+        | Record<string, string>
+        | ((prev: URLSearchParams) => URLSearchParams)
+    ) => {
+      let params: URLSearchParams;
+      if (typeof next === "function") {
+        params = next(new URLSearchParams(currentQs));
+      } else if (next instanceof URLSearchParams) {
+        params = next;
+      } else {
+        params = new URLSearchParams(next);
+      }
+      const qs = params.toString();
+      if (qs === currentQs) return;
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [currentQs, pathname, router]
+  );
 
   return [searchParams, setSearchParams] as const;
 }

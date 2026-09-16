@@ -31,6 +31,28 @@ export function unwrapRecord(raw: unknown): Record<string, unknown> {
   return {};
 }
 
+export function apiErrorMessage(raw: unknown, fallback: string): string {
+  if (!raw || typeof raw !== "object") return fallback;
+  const rec = raw as Record<string, unknown>;
+  if (typeof rec.message === "string" && rec.message.trim()) return rec.message;
+  const error = rec.error;
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
+
+export function unwrapAuthSession<TUser>(raw: unknown): { token: string; user: TUser } {
+  const payload = unwrapRecord(raw);
+  const token = typeof payload.token === "string" ? payload.token : "";
+  const user = payload.user as TUser | undefined;
+  if (!token || !user) {
+    throw new Error("Réponse d'authentification invalide");
+  }
+  return { token, user };
+}
+
 export function unwrapList(raw: unknown, keys: string[]): unknown[] {
   const unwrapped = unwrapApi(raw);
   if (Array.isArray(unwrapped)) return unwrapped;

@@ -10,18 +10,20 @@ import { shopKeys } from "@/lib/query-keys";
 import { withTimeout } from "@infrastructure/api/with-timeout";
 import { shouldRetryQuery } from "@infrastructure/api/query-retry";
 
-export function useShopsQuery() {
+export function useShopsQuery(enabled = true) {
   return useQuery({
     queryKey: shopKeys.list(),
     queryFn: () => withTimeout(getAllShops()),
+    enabled,
     staleTime: 2 * 60_000,
   });
 }
 
-export function useMyShopQuery() {
+export function useMyShopQuery(enabled = true) {
   return useQuery({
     queryKey: shopKeys.mine(),
     queryFn: () => withTimeout(getMyShop()),
+    enabled,
     staleTime: 60_000,
     retry: (failureCount, error) => {
       const message = error instanceof Error ? error.message.toLowerCase() : "";

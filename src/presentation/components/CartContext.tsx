@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext } from 'react';
-import { getCartItemsCount, useCartQuery } from '@/hooks/queries/use-cart-query';
+import React, { createContext, useContext } from "react";
+import { getCartItemsCount, useCartQuery } from "@/hooks/queries/use-cart-query";
+import { useAuthSession } from "@/hooks/use-auth-session";
 
 type CartContextType = {
   itemsCount: number;
@@ -16,10 +17,14 @@ const CartContext = createContext<CartContextType>({
 export const useCart = () => useContext(CartContext);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, user } = useAuthSession();
   const { data: cart, refetch } = useCartQuery();
   const itemsCount = getCartItemsCount(cart?.items);
+  const canRefresh =
+    isAuthenticated && String(user?.role || "").toUpperCase() === "CLIENT";
 
   const refreshCart = async () => {
+    if (!canRefresh) return;
     await refetch();
   };
 

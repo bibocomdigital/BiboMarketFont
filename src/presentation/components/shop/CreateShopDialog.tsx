@@ -1,14 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Store, Upload, MapPin, Phone, X, Tag } from "lucide-react";
 import { useCreateShopMutation } from "@/hooks/mutations/use-catalog-mutations";
-import {
-  getShopCategories,
-  isLogoUploadFailure,
-  type ShopCategory,
-} from "@/services/shopService";
+import { isLogoUploadFailure } from "@/services/shopService";
+import { useShopCategoriesQuery } from "@/hooks/queries/use-shop-categories-query";
 import { appAlert } from "@/presentation/lib/swal";
 
 import {
@@ -60,10 +57,17 @@ const CreateShopDialog: React.FC<CreateShopDialogProps> = ({ onSuccess }) => {
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [previewURL, setPreviewURL] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
-  const [categories, setCategories] = useState<ShopCategory[]>([]);
-  const [categoryLoadError, setCategoryLoadError] = useState<string | null>(
-    null
-  );
+  const {
+    data: categories = [],
+    isError: categoriesFailed,
+    isPending: categoriesPending,
+    refetch: refetchCategories,
+  } = useShopCategoriesQuery();
+  const categoryLoadError = categoriesFailed
+    ? "Impossible de charger les catégories. Réouvrez la fenêtre ou réessayez."
+    : !categoriesPending && categories.length === 0
+      ? "Aucune catégorie disponible pour le moment."
+      : null;
 
   const {
     register,
@@ -84,7 +88,7 @@ const CreateShopDialog: React.FC<CreateShopDialogProps> = ({ onSuccess }) => {
       return;
     }
     if (/catégorie|categorie/i.test(message)) {
-      setCategoryLoadError(message);
+      void refetchCategories();
       return;
     }
     if (isLogoUploadFailure(error)) {
@@ -95,35 +99,6 @@ const CreateShopDialog: React.FC<CreateShopDialogProps> = ({ onSuccess }) => {
     }
     await appAlert.error("Création impossible", message);
   };
-
-  useEffect(() => {
-    if (!open) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await getShopCategories();
-        if (!cancelled) {
-          setCategories(list);
-          setCategoryLoadError(
-            list.length === 0
-              ? "Aucune catégorie disponible pour le moment."
-              : null
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setCategoryLoadError(
-            "Impossible de charger les catégories. Réouvrez la fenêtre ou réessayez."
-          );
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

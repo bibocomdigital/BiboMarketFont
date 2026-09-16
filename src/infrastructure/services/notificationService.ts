@@ -4,6 +4,7 @@
 
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { unwrapList } from '../api/api-envelope';
 
 // Types pour les notifications
 export interface Notification {
@@ -18,6 +19,16 @@ export interface Notification {
   createdAt: string;
   updatedAt: string;
   priority: number;
+}
+
+export function isChatMessageNotification(
+  notification: Pick<Notification, "type"> & { resourceType?: string | null; message?: string }
+): boolean {
+  const type = String(notification.type || "").toUpperCase();
+  if (type === "MESSAGE") return true;
+  const resource = String(notification.resourceType || "").toUpperCase();
+  if (resource === "MESSAGE") return true;
+  return /^nouveau message\b/i.test(String(notification.message || ""));
 }
 
 export interface MarkAsReadResponse {
@@ -77,17 +88,13 @@ export const isNotificationsAccessible = (): boolean => {
  */
 export const sortNotificationsByDate = (notifications: Notification[]): Notification[] => {
   try {
-    console.log('🔄 [NOTIFICATION] Tri des notifications par date');
-    
-    const sorted = notifications.sort((a: Notification, b: Notification) => 
+    if (!Array.isArray(notifications)) return [];
+    return [...notifications].sort((a: Notification, b: Notification) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-    
-    console.log('✅ [NOTIFICATION] Notifications triées avec succès');
-    return sorted;
   } catch (error) {
     console.error('❌ [NOTIFICATION] Erreur lors du tri des notifications:', error);
-    return notifications;
+    return Array.isArray(notifications) ? notifications : [];
   }
 };
 
@@ -125,12 +132,11 @@ export const getUserNotifications = async (): Promise<Notification[]> => {
       throw new Error(errorData.message || 'Erreur lors de la récupération des notifications');
     }
     
-    const data = await response.json();
+    const items = unwrapList(await response.json(), ['notifications']) as Notification[];
     console.log('✅ [NOTIFICATION] Notifications récupérées avec succès');
-    console.log('📊 [NOTIFICATION] Nombre de notifications:', data.length);
+    console.log('📊 [NOTIFICATION] Nombre de notifications:', items.length);
     
-    // Trier les notifications par date (les plus récentes d'abord)
-    return sortNotificationsByDate(data);
+    return sortNotificationsByDate(items);
   } catch (error) {
     console.error('❌ [NOTIFICATION] Erreur:', error);
     throw error;
@@ -312,7 +318,9 @@ export const getUnreadNotificationsCount = async (): Promise<number> => {
     const notifications = await getUserNotifications();
     
     // Compter les notifications non lues
-    const unreadCount = notifications.filter(notification => !notification.isRead).length;
+    const unreadCount = notifications.filter(
+      (notification) => !notification.isRead && !isChatMessageNotification(notification)
+    ).length;
     
     console.log('✅ [NOTIFICATION] Nombre de notifications non lues calculé:', unreadCount);
     
@@ -335,7 +343,9 @@ export const getUnreadNotifications = async (): Promise<Notification[]> => {
     const notifications = await getUserNotifications();
     
     // Filtrer les notifications non lues
-    const unreadNotifications = notifications.filter(notification => !notification.isRead);
+    const unreadNotifications = notifications.filter(
+      (notification) => !notification.isRead && !isChatMessageNotification(notification)
+    );
     
     console.log('✅ [NOTIFICATION] Notifications non lues récupérées:', unreadNotifications.length);
     

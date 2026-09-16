@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole, mapStringToUserRole } from '@/types/user';
 import { verifyCode, login, resendVerificationCode } from '@/services/authService';
+import { dashboardPathFor } from '@/hooks/use-auth-session';
 
 type VerificationScenario = 'success' | 'incorrect' | 'expired' | 'error';
 
@@ -117,20 +118,7 @@ const VerifyCode = () => {
         console.log('👤 [VERIFY] Rôle transmis lors de l\'inscription:', userRoleString);
         
         setTimeout(() => {
-          console.log('⏱️ [VERIFY] Délai de redirection démarré (3s)');
-          
-          // Respecter le rôle transmis depuis l'inscription
-          if (userRoleString === UserRole.MERCHANT) {
-            console.log('🔄 [VERIFY] Redirection vers le tableau de bord commerçant');
-            navigate('/merchant-dashboard', { replace: true });
-          } else if (userRoleString === UserRole.SUPPLIER) {
-            console.log('🔄 [VERIFY] Redirection vers le tableau de bord fournisseur');
-            navigate('/supplier-dashboard', { replace: true });
-          } else {
-            console.log('🔄 [VERIFY] Redirection vers le tableau de bord client');
-            navigate('/client-dashboard', { replace: true });
-          }
-          console.log('✅ [VERIFY] Redirection effectuée!');
+          navigate(dashboardPathFor(loginResult.user.role), { replace: true });
         }, 3000);
       } catch (loginError) {
         console.error('❌ [VERIFY] Erreur lors de la connexion automatique:', loginError);

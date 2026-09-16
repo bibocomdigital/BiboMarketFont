@@ -5,21 +5,17 @@
 export enum UserRole {
   CLIENT = "CLIENT",
   MERCHANT = "MERCHANT",
-  SUPPLIER = "SUPPLIER"
+  SUPPLIER = "SUPPLIER",
+  ADMIN = "ADMIN",
 }
 
-/**
- * User role display names
- */
 export const USER_ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.CLIENT]: "Client",
   [UserRole.MERCHANT]: "Commerçant",
-  [UserRole.SUPPLIER]: "Fournisseur"
+  [UserRole.SUPPLIER]: "Fournisseur",
+  [UserRole.ADMIN]: "Administrateur",
 };
 
-/**
- * Mapping des rôles de chaîne aux valeurs UserRole
- */
 export const mapStringToUserRole = (role: string): UserRole => {
   switch (role.toUpperCase()) {
     case 'CLIENT':
@@ -30,7 +26,10 @@ export const mapStringToUserRole = (role: string): UserRole => {
     case 'SUPPLIER':
     case 'FOURNISSEUR':
       return UserRole.SUPPLIER;
+    case 'ADMIN':
+    case 'ADMINISTRATEUR':
+      return UserRole.ADMIN;
     default:
-      return UserRole.CLIENT; // Valeur par défaut
+      return UserRole.CLIENT;
   }
 };

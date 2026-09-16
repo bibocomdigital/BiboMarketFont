@@ -31,7 +31,11 @@ export async function parseApiError(
     body = {};
   }
 
-  const raw = body.message ?? body.error;
+  const nestedError =
+    body.error && typeof body.error === "object"
+      ? (body.error as { message?: unknown }).message
+      : undefined;
+  const raw = body.message ?? nestedError ?? body.error;
   let rawMessage: string | undefined;
   if (typeof raw === "string" && raw.trim()) {
     rawMessage = raw.trim();
