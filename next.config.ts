@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import path from "path";
 
-const apiUrl = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001/api";
+const apiUrl = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3007/api";
 
 const nextConfig: NextConfig = {
   output: "standalone",

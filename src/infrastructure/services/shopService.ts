@@ -149,7 +149,7 @@ export const getMyShop = async (): Promise<ShopWithProducts> => {
     }
     
     // Appeler l'API pour récupérer la boutique
-    const response = await fetch(`${backendUrl}/shop/my-shop`, {
+    const response = await fetch(`${backendUrl}/shop/mine`, {
       method: 'GET',
       headers: getAuthHeaders()
     });
@@ -163,6 +163,9 @@ export const getMyShop = async (): Promise<ShopWithProducts> => {
       data = await response.json();
       if (!response.ok) {
         errorMessage = data.message || errorMessage;
+        if (response.status === 404 || response.status === 403) {
+          throw new Error('Aucune boutique trouvée');
+        }
         console.error('❌ [SHOP] Erreur lors de la récupération de la boutique:', errorMessage);
         throw new Error(errorMessage);
       }
@@ -182,6 +185,29 @@ export const getMyShop = async (): Promise<ShopWithProducts> => {
     console.error('❌ [SHOP] Erreur:', error);
     throw error;
   }
+};
+
+export interface ShopCategory {
+  id: number;
+  name: string;
+}
+
+export const getShopCategories = async (): Promise<ShopCategory[]> => {
+  const response = await fetch(`${backendUrl}/categories-shop`);
+  if (!response.ok) {
+    throw new Error('Impossible de charger les catégories de boutique');
+  }
+  const data = await response.json();
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+};
+
+export const isLogoUploadFailure = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /logo|téléchargement|telechargement|upload|cloudinary|internal server/i.test(
+    message
+  );
 };
 
 /**
@@ -238,8 +264,12 @@ export const createShop = async (shopData: FormData): Promise<Shop> => {
     
     // Vérifier si la requête a réussi
     if (!response.ok) {
-      console.error('❌ [SHOP] Erreur lors de la création de la boutique:', data.message);
-      throw new Error(data.message || 'Erreur lors de la création de la boutique');
+      const rawMessage = data.message || data.error;
+      const message = Array.isArray(rawMessage)
+        ? rawMessage.join(', ')
+        : rawMessage || 'Erreur lors de la création de la boutique';
+      console.error('❌ [SHOP] Erreur lors de la création de la boutique:', message);
+      throw new Error(message);
     }
     
     console.log('✅ [SHOP] Boutique créée avec succès:', data.shop.name);
@@ -282,12 +312,22 @@ export const updateShop = async (shopId: number, shopData: FormData): Promise<Sh
       body: shopData
     });
     
+    const responseText = await response.text();
+    let data: { message?: string | string[]; error?: string; shop?: Shop } = {};
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      throw new Error('Format de réponse invalide depuis le serveur');
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Erreur lors de la mise à jour de la boutique');
+      const rawMessage = data.message || data.error;
+      const message = Array.isArray(rawMessage)
+        ? rawMessage.join(', ')
+        : rawMessage || 'Erreur lors de la mise à jour de la boutique';
+      throw new Error(message);
     }
     
-    const data = await response.json();
     console.log('✅ [SHOP] Boutique mise à jour avec succès:', data.shop.name);
     
     return data.shop;

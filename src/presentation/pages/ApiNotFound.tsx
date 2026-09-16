@@ -15,7 +15,7 @@ const ApiNotFound = () => {
     
     // Extraction du chemin API complet
     const apiPath = location.pathname;
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3007/api';
     const fullBackendUrl = `${backendUrl}${apiPath}${location.search}`;
     
     // Si c'est une route d'authentification Google, on redirige directement vers le backend

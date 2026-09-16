@@ -104,9 +104,9 @@ const images = [
   };
 
   return (
-    <div className="relative min-h-[90vh] bg-white py-16 mt-8">
-      <div className="container mx-auto px-6 sm:px-10 z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+    <div className="relative min-h-[min(90dvh,52rem)] bg-transparent pb-12 pt-28 sm:pt-32 md:pb-16">
+      <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-10">
+        <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-12">
           {/* Colonne gauche - Texte */}
           <div className="max-w-xl">
             <AnimatedText delay={100}>
@@ -116,7 +116,7 @@ const images = [
             </AnimatedText>
             
             <AnimatedText delay={200} variant="slide">
-              <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight text-slate-800">
+              <h1 className="mb-6 text-3xl font-bold leading-tight text-slate-800 sm:text-4xl md:text-5xl lg:text-6xl">
                 <span>Votre écosystème</span>
                 <span className="block">commercial du</span> 
                 <span className="block text-bibocom-accent">futur</span>
@@ -199,8 +199,8 @@ const images = [
           </div>
           
           {/* Colonne droite - Image et statistiques */}
-          <div className="relative hidden lg:block">
-            <div className="relative rounded-2xl h-[600px] overflow-hidden">
+          <div className="relative hidden md:block">
+            <div className="relative h-[380px] overflow-hidden rounded-2xl lg:h-[600px]">
               {/* Image principale */}
               <div className="absolute right-0 h-full w-5/6 z-10">
                 {images.map((image, index) => (

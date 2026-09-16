@@ -107,7 +107,7 @@
   }
 
   body {
-    @apply bg-white text-foreground font-sans antialiased scroll-smooth;
+    @apply bg-bibocom-light text-foreground font-sans antialiased scroll-smooth;
   }
 
   h1, h2, h3, h4, h5, h6 {

@@ -5,17 +5,14 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
 import RegisterStep1 from "./register/RegisterStep1";
-// import RegisterStep2 from './register/RegisterStep2';
 import {
   registerUser as apiRegisterUser,
-  handleCheckEmail,
+  login,
   UserRole,
 } from "@/services/authService";
-import { Country, getDefaultCountry } from "@/data/countries";
+import { appAlert } from "@/presentation/lib/swal";
 
 
 const formSchema = z
@@ -30,7 +27,7 @@ const formSchema = z
     password: z.string().min(6, {
       message: "Le mot de passe doit contenir au moins 6 caractères",
     }),
-    email: z.string().min(19, { message: "Email de téléphone invalide" }),
+    email: z.string().email({ message: "Veuillez entrer une adresse email valide" }),
     confirmPassword: z
       .string()
       .min(1, { message: "Veuillez confirmer votre mot de passe" }),
@@ -62,11 +59,6 @@ const RegisterForm = ({
   });
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [emailExists, setEmailExists] = useState<boolean>(false);
-  const [phoneExists, setPhoneExists] = useState<boolean>(false);
-
-  const [formData, setFormData] = useState<FormData | null>(null);
-  const { toast } = useToast();
 
 
   // Initialiser le formulaire avec les valeurs par défaut
@@ -183,19 +175,11 @@ const RegisterForm = ({
 
       Object.entries(data).forEach(([key, value]) => {
         if (key !== "confirmPassword") {
-          console.log(key, String(value));
           formData.append(key, String(value));
         }
-      });      
-      
-
-      const result = await apiRegisterUser(formData);
-
-      toast({
-        title: "Inscription réussie",
-        description: "Un code de vérification a été envoyé à votre email.",
       });
 
+      await apiRegisterUser(formData);
       localStorage.removeItem("registerFormData");
 
       const searchParams = new URLSearchParams(location.search);
@@ -206,21 +190,41 @@ const RegisterForm = ({
         `${window.location.pathname}?${searchParams.toString()}`
       );
 
-      navigate("/login", {
-        state: {
-          initialEmail: data.email,
-          
-        },
-      });
+      try {
+        const session = await login({
+          email: data.email,
+          password: data.password,
+        });
+        const userRole = session.user.role.toUpperCase();
+
+        if (userRole === "MERCHANT" || userRole === "COMMERCANT") {
+          navigate("/merchant-dashboard");
+        } else if (userRole === "SUPPLIER" || userRole === "FOURNISSEUR") {
+          navigate("/supplier-dashboard");
+        } else {
+          navigate("/client-dashboard");
+        }
+      } catch {
+        navigate("/login", {
+          state: { initialEmail: data.email },
+        });
+      }
 
       if (onClose) onClose();
     } catch (error) {
-      toast({
-        title: "Erreur d'inscription",
-        description:
-          error instanceof Error ? error.message : "Une erreur est survenue",
-        variant: "destructive",
-      });
+      const message =
+        error instanceof Error ? error.message : "Une erreur est survenue";
+      const lower = message.toLowerCase();
+
+      if (/email|e-mail|mail/.test(lower)) {
+        form.setError("email", { type: "server", message });
+      } else if (/téléphone|telephone|phone/.test(lower)) {
+        form.setError("phoneNumber", { type: "server", message });
+      } else if (/mot de passe|password/.test(lower)) {
+        form.setError("password", { type: "server", message });
+      } else {
+        await appAlert.error("Inscription impossible", message);
+      }
     } finally {
       setIsSubmitting(false);
     }

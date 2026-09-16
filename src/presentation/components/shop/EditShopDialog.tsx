@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { Shop } from '@/services/shopService';
+import { Shop, formatImageUrl, isLogoUploadFailure } from '@/services/shopService';
 import { useUpdateShopMutation } from '@/hooks/mutations/use-catalog-mutations';
+import { appAlert } from '@/presentation/lib/swal';
 import { 
   Dialog,
   DialogContent,
@@ -25,9 +26,22 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UploadCloud } from 'lucide-react';
+
+const MAX_LOGO_SIZE = 2 * 1024 * 1024;
+const LOGO_UPLOAD_HINT =
+  "Le nouveau logo n'a pas pu être enregistré. Le serveur refuse actuellement le téléchargement d'images. Les autres informations seront enregistrées sans changer le logo.";
+
+function withoutLogo(formData: FormData): FormData {
+  const next = new FormData();
+  formData.forEach((value, key) => {
+    if (key !== 'logo') {
+      next.append(key, value);
+    }
+  });
+  return next;
+}
 
 const formSchema = z.object({
   name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
@@ -49,13 +63,14 @@ const EditShopDialog: React.FC<EditShopDialogProps> = ({
   onOpenChange,
   onShopUpdated
 }) => {
-  const { toast } = useToast();
   const updateShopMutation = useUpdateShopMutation();
+  const isSaving = updateShopMutation.isPending;
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(
-    shop.logo ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/uploads/${shop.logo.split('/').pop()}` : null
+    formatImageUrl(shop.logo)
   );
-  
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -68,62 +83,85 @@ const EditShopDialog: React.FC<EditShopDialogProps> = ({
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
-    
-    // Vérification du type de fichier
+
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez sélectionner une image valide",
-        variant: "destructive",
-      });
+      setLogoError('Veuillez sélectionner une image JPG, PNG, WEBP ou GIF.');
       return;
     }
-    
-    // Création d'une URL pour la prévisualisation
+
+    if (file.size > MAX_LOGO_SIZE) {
+      setLogoError('Le logo dépasse 2 Mo. Choisissez une image plus légère.');
+      return;
+    }
+
+    setLogoError(null);
     const previewUrl = URL.createObjectURL(file);
     setLogoPreview(previewUrl);
     setLogoFile(file);
   };
 
+  const finishSuccess = (savedWithoutNewLogo: boolean) => {
+    onShopUpdated();
+    onOpenChange(false);
+    if (logoPreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(logoPreview);
+    }
+    if (savedWithoutNewLogo) {
+      void appAlert.warning('Logo non enregistré', LOGO_UPLOAD_HINT);
+    }
+  };
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setLogoError(null);
+
+    const formData = new FormData();
+    formData.append('name', values.name);
+    formData.append('description', values.description);
+    formData.append('address', values.address);
+    formData.append('phoneNumber', values.phoneNumber);
+
+    if (logoFile) {
+      formData.append('logo', logoFile);
+    }
+
     try {
-      console.log("🔄 [EDIT SHOP] Soumission du formulaire");
-      
-      // Créer un FormData si un logo est présent
-      const formData = new FormData();
-      formData.append('name', values.name);
-      formData.append('description', values.description);
-      formData.append('address', values.address);
-      formData.append('phoneNumber', values.phoneNumber);
-      
-      // Ajouter le fichier logo s'il existe
-      if (logoFile) {
-        formData.append('logo', logoFile);
-      }
-      
-      console.log("📤 [EDIT SHOP] Envoi des données vers le serveur");
       await updateShopMutation.mutateAsync({ shopId: shop.id, formData });
-      console.log("✅ [EDIT SHOP] Boutique mise à jour avec succès");
-      
-      toast({
-        title: "Boutique modifiée",
-        description: "Votre boutique a été mise à jour avec succès",
-      });
-      onShopUpdated();
-      onOpenChange(false);
-      
-      // Nettoyage des URL d'objets pour éviter les fuites de mémoire
-      if (logoPreview && !shop.logo) {
-        URL.revokeObjectURL(logoPreview);
-      }
+      finishSuccess(false);
     } catch (error) {
-      console.error("❌ [EDIT SHOP] Erreur lors de la mise à jour:", error);
-      toast({
-        title: "Erreur",
-        description: "Une erreur s'est produite lors de la mise à jour de votre boutique",
-        variant: "destructive",
-      });
+      if (logoFile && isLogoUploadFailure(error)) {
+        setLogoError(LOGO_UPLOAD_HINT);
+        try {
+          await updateShopMutation.mutateAsync({
+            shopId: shop.id,
+            formData: withoutLogo(formData),
+          });
+          finishSuccess(true);
+          return;
+        } catch (retryError) {
+          const message =
+            retryError instanceof Error
+              ? retryError.message
+              : 'Impossible de mettre à jour la boutique.';
+          await appAlert.error('Mise à jour impossible', message);
+          return;
+        }
+      }
+
+      if (isLogoUploadFailure(error)) {
+        setLogoError(
+          "Le logo n'a pas pu être envoyé. Enregistrez sans changer le logo, ou réessayez avec une image plus légère."
+        );
+        return;
+      }
+
+      await appAlert.error(
+        'Mise à jour impossible',
+        error instanceof Error
+          ? error.message
+          : 'Une erreur est survenue lors de la mise à jour de votre boutique.'
+      );
     }
   };
 
@@ -170,6 +208,9 @@ const EditShopDialog: React.FC<EditShopDialogProps> = ({
               <p className="text-xs text-gray-500 mt-2">
                 Formats recommandés : JPG, PNG. Taille maximale : 2MB
               </p>
+              {logoError && (
+                <p className="text-red-500 text-xs mt-2">{logoError}</p>
+              )}
             </div>
             
             <FormField
@@ -237,10 +278,13 @@ const EditShopDialog: React.FC<EditShopDialogProps> = ({
                 variant="outline" 
                 type="button" 
                 onClick={() => onOpenChange(false)}
+                disabled={isSaving}
               >
                 Annuler
               </Button>
-              <Button type="submit">Enregistrer</Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

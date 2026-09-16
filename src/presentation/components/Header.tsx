@@ -20,6 +20,13 @@ const Header = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = isMobileMenuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
+
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
@@ -33,25 +40,27 @@ const Header = () => {
   ];
 
   return (
+    <>
     <header
       className={cn(
-        'fixed w-full top-0 left-0 z-50 transition-all duration-300',
-        isScrolled ? 'glass py-3 shadow-md' : 'bg-transparent py-5'
+        'fixed inset-x-0 top-0 z-50 w-full transition-all duration-300',
+        'bg-bibocom-light/95 backdrop-blur-md',
+        isScrolled ? 'border-b border-slate-200/80 py-3 shadow-sm' : 'border-b border-transparent py-4 md:py-5'
       )}
     >
-      <div className="max-w-7xl mx-auto px-6 sm:px-10">
-        <div className="flex items-center justify-between">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10">
+        <div className="flex items-center justify-between gap-3">
           {/* Logo */}
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
-              <span className="text-xl md:text-2xl font-bold text-bibocom-primary">
+              <span className="text-lg font-bold text-bibocom-primary sm:text-xl md:text-2xl">
                 BIBOCOM<span className="text-bibocom-accent">MARKET</span>
               </span>
             </Link>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
+          <nav className="hidden lg:flex items-center gap-5 xl:gap-8">
             {navigationLinks.map((link) => (
               <div key={link.name} className="relative group">
                 <a
@@ -94,7 +103,7 @@ const Header = () => {
           </nav>
 
           {/* Search, Cart and Action Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden lg:flex items-center gap-3 xl:gap-4">
             <button className="text-bibocom-primary hover:text-bibocom-accent transition-colors duration-300">
               <Search size={20} />
             </button>
@@ -117,25 +126,43 @@ const Header = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center">
+          <div className="flex items-center lg:hidden">
             <button 
-              className="text-bibocom-primary p-2"
+              type="button"
+              className="p-2 text-bibocom-primary"
               onClick={toggleMobileMenu}
+              aria-label={isMobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+              aria-expanded={isMobileMenuOpen}
             >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              <Menu size={24} />
             </button>
           </div>
         </div>
       </div>
+    </header>
 
-      {/* Mobile Navigation */}
       <div 
         className={cn(
-          'md:hidden fixed inset-0 bg-white z-40 transition-transform duration-300 ease-in-out transform',
+          'fixed inset-0 z-[60] overflow-y-auto bg-bibocom-light lg:hidden',
+          'transition-transform duration-300 ease-in-out',
           isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
         )}
+        aria-hidden={!isMobileMenuOpen}
       >
-        <div className="flex flex-col h-full pt-20 px-6">
+        <div className="flex h-full flex-col overflow-y-auto px-6 pt-6">
+          <div className="mb-8 flex items-center justify-between">
+            <span className="text-xl font-bold text-bibocom-primary">
+              BIBOCOM<span className="text-bibocom-accent">MARKET</span>
+            </span>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-bibocom-primary"
+              onClick={() => setIsMobileMenuOpen(false)}
+              aria-label="Fermer le menu"
+            >
+              <X size={24} />
+            </button>
+          </div>
           <nav className="flex flex-col space-y-6">
             {navigationLinks.map((link) => (
               <a
@@ -148,16 +175,20 @@ const Header = () => {
               </a>
             ))}
           </nav>
-          <div className="mt-8 space-y-4">
-            <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
-              <Button fullWidth variant="outline">
-                Se connecter
-              </Button>
+          <div className="mt-8 flex w-full flex-col gap-3">
+            <Link
+              to="/login"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex h-12 w-full items-center justify-center rounded-xl border border-bibocom-primary bg-white text-sm font-medium text-bibocom-primary transition-colors hover:bg-bibocom-primary/5"
+            >
+              Se connecter
             </Link>
-            <Link to="/register" onClick={() => setIsMobileMenuOpen(false)}>
-              <Button fullWidth>
-                S'inscrire
-              </Button>
+            <Link
+              to="/register"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex h-12 w-full items-center justify-center rounded-xl bg-bibocom-primary text-sm font-medium text-white transition-colors hover:bg-[#081c30]"
+            >
+              S&apos;inscrire
             </Link>
           </div>
           <div className="mt-auto mb-10 flex items-center justify-center space-x-6">
@@ -173,7 +204,7 @@ const Header = () => {
           </div>
         </div>
       </div>
-    </header>
+    </>
   );
 };
 

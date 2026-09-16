@@ -18,8 +18,7 @@ import EmailInput from "./EmailInput";
 import PasswordInput from "./PasswordInput";
 import ForgotPasswordDialog from "./ForgotPasswordDialog";
 import SocialLoginButton from "./SocialLoginButton";
-import { useToast } from "@/hooks/use-toast";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useLoginMutation } from "@/hooks/mutations/use-auth-mutations";
 import { getUserErrorMessage } from "@domain/errors/app-error";
 import { appAlert } from "@/presentation/lib/swal";
@@ -49,9 +48,7 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
   const [resetEmail, setResetEmail] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginType, setLoginType] = useState<"email" | "phone">("phone");
-  const { toast } = useToast();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const form = useForm<z.infer<typeof LoginFormSchema>>({
     resolver: zodResolver(LoginFormSchema),
@@ -109,14 +106,6 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
       console.log("📤 [LOGIN] Données envoyées:", loginData);
 
       const response = await loginMutation.mutateAsync(loginData);
-
-
-      toast({
-        title: "Connexion réussie",
-        description: "Vous êtes maintenant connecté",
-      });
-      await appAlert.success("Connexion réussie", "Vous êtes maintenant connecté.");
-
       const userRole = response.user.role.toUpperCase();
 
       if (userRole === "MERCHANT" || userRole === "COMMERCANT") {
@@ -141,13 +130,16 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
       console.error("❌ [LOGIN] Erreur de connexion:", error);
 
       const errorMessage = getUserErrorMessage(error);
-      setLoginError(errorMessage);
-      toast({
-        title: "Erreur de connexion",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      await appAlert.error("Connexion impossible", errorMessage);
+      const isCredentialError =
+        /mot de passe|identifiant|email|téléphone|telephone|incorrect|invalide|n'existe|introuvable|unauthorized|401/i.test(
+          errorMessage
+        );
+
+      if (isCredentialError) {
+        setLoginError(errorMessage);
+      } else {
+        await appAlert.error("Connexion impossible", errorMessage);
+      }
     }
   };
 

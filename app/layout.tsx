@@ -21,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang={SEO_HTML_LANG} className={`${inter.variable} h-full antialiased`}>
-      <body className={`${inter.className} min-h-full flex flex-col bg-white`}>
+      <body className={`${inter.className} min-h-full flex flex-col bg-bibocom-light`}>
         <JsonLd data={organizationJsonLd()} />
         <JsonLd data={websiteJsonLd()} />
         <AppProviders>{children}</AppProviders>

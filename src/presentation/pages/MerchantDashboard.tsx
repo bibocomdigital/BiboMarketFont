@@ -46,16 +46,10 @@ const MerchantDashboard = () => {
   }, [shopData, hasShop]);
   
   const handleShopCreated = () => {
-    toast({
-      title: 'Boutique créée avec succès',
-      description: 'Votre boutique a été créée et est maintenant visible pour vos clients.',
-    });
-    
     console.log('🔄 [MERCHANT] Rafraîchissement des données de la boutique après création');
-    // Forcer un refetch pour récupérer les nouvelles données
     setTimeout(() => {
       refetch();
-    }, 1000); // Petit délai pour s'assurer que le backend a bien traité la création
+    }, 1000);
   };
 
   const handleShopUpdated = () => {

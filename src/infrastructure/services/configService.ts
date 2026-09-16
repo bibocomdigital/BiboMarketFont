@@ -1,6 +1,6 @@
 import { getUserErrorMessage, toAppError } from "@domain/errors/app-error";
 
-export const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api";
+export const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3007/api";
 
 export interface ApiError {
   message?: string;

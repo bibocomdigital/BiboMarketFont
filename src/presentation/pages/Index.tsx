@@ -73,9 +73,9 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden">
+    <div className="relative flex min-h-dvh flex-col bg-bibocom-light">
       {/* Decorative background elements */}
-      <div className="fixed inset-0 z-0 bg-gradient-to-b from-bibocom-light to-white overflow-hidden">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-gradient-to-b from-bibocom-light to-white">
         <div className="absolute top-0 left-0 w-full h-full bg-hero-pattern opacity-5"></div>
         <div className="absolute -top-20 -right-20 w-96 h-96 bg-bibocom-secondary/20 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute top-1/3 left-20 w-64 h-64 bg-bibocom-accent/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>

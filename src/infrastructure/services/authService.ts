@@ -1,5 +1,5 @@
 // Configuration de l'API
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3007/api";
 
 // URL de base Cloudinary pour les images
 export const CLOUDINARY_BASE_URL = "https://res.cloudinary.com/yourdomain"; // À remplacer par votre domaine Cloudinary
@@ -137,11 +137,19 @@ export const registerUser = async (formData: FormData): Promise<{
       throw new Error('Le mot de passe doit contenir au moins 6 caractères');
     }
 
-    // Appel API pour l'inscription
+    const payload = {
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+      firstName: String(formData.get("firstName") ?? ""),
+      lastName: String(formData.get("lastName") ?? ""),
+      phoneNumber: String(formData.get("phoneNumber") ?? ""),
+      role: String(formData.get("role") ?? "CLIENT"),
+    };
+
     const response = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      body: formData,
-      // Ne pas définir Content-Type, il sera automatiquement défini avec le boundary pour FormData
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
