@@ -71,7 +71,8 @@ const RecentOrders = ({
           <p className="text-gray-500">Aucune commande trouvée pour le moment.</p>
         </div>
       ) : (
-        <div className="border border-gray-200 rounded-md overflow-hidden">
+        <>
+        <div className="hidden overflow-x-auto rounded-md border border-gray-200 md:block">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -113,6 +114,37 @@ const RecentOrders = ({
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 md:hidden">
+          {orders.map((order) => (
+            <Link
+              key={order.id}
+              to={`/commandes/${order.id}`}
+              className="block rounded-md border border-gray-200 p-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-blue-800">{order.orderNumber}</span>
+                <span
+                  className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                    order.status === "Expédiée"
+                      ? "bg-blue-100 text-blue-800"
+                      : order.status === "Livrée"
+                        ? "bg-green-100 text-green-800"
+                        : order.status === "Annulée"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                  }`}
+                >
+                  {order.status}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-sm text-gray-600">
+                <span>{order.date}</span>
+                <span>{order.total}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+        </>
       )}
     </div>
   );

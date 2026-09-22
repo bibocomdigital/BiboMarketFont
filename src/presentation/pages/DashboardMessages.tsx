@@ -22,7 +22,7 @@ const DashboardMessages = () => {
   };
 
   if (loading) return (
-    <div className="flex justify-center items-center h-screen">
+    <div className="flex justify-center items-center h-dvh">
       <div className="animate-spin text-orange-500">
         <Clock size={48} />
       </div>

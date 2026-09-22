@@ -19,6 +19,7 @@ import {
   GhostButton,
   MerchantInput,
   MerchantSelect,
+  MobileCard,
   Panel,
   StateMessage,
   Td,
@@ -164,7 +165,8 @@ export function MerchantOrdersView({
         ) : filtered.length === 0 ? (
           <StateMessage>Aucune commande trouvée.</StateMessage>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-slate-100">
@@ -230,6 +232,60 @@ export function MerchantOrdersView({
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {filtered.map((order) => {
+              const items = merchantOrderItems(order);
+              return (
+                <MobileCard key={order.id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <GhostButton onClick={() => onSelectOrder(order.id)}>#{order.id}</GhostButton>
+                    <span className="text-xs text-slate-400">{formatDateFr(order.createdAt)}</span>
+                  </div>
+                  <p className="mt-3 text-sm font-medium">{fullName(order.client)}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {items.map((item) => item.product?.name || "Produit").join(", ") || "—"}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium">{formatFcfa(order.totalAmount)}</span>
+                    <span />
+                  </div>
+                  <div className="mt-3">
+                    <MerchantSelect
+                      className="w-full"
+                      value={String(order.status)}
+                      onChange={(event) =>
+                        patchStatus.mutate(
+                          { orderId: order.id, status: event.target.value },
+                          {
+                            onError: (error) =>
+                              toast({
+                                title: "Statut non mis à jour",
+                                description: getUserErrorMessage(error),
+                                variant: "destructive",
+                              }),
+                          }
+                        )
+                      }
+                    >
+                      {ORDER_STATUSES.map((item) => (
+                        <option key={item} value={item}>
+                          {orderStatusLabel(item)}
+                        </option>
+                      ))}
+                    </MerchantSelect>
+                  </div>
+                  {onMessageClient && Number(order.client?.id || order.clientId) ? (
+                    <div className="mt-3">
+                      <GhostButton onClick={() => onMessageClient(Number(order.client?.id || order.clientId))}>
+                        Écrire
+                      </GhostButton>
+                    </div>
+                  ) : null}
+                </MobileCard>
+              );
+            })}
+          </div>
+          </>
         )}
       </Panel>
 

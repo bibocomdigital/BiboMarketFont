@@ -16,6 +16,7 @@ import {
   AdminSelect,
   ConfirmBar,
   GhostButton,
+  MobileCard,
   PaginationBar,
   Panel,
   StateMessage,
@@ -118,7 +119,8 @@ export function AdminShopsView({ enabled }: { enabled: boolean }) {
         ) : shops.length === 0 ? (
           <StateMessage>Aucune boutique trouvée.</StateMessage>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-white/5">
@@ -186,6 +188,69 @@ export function AdminShopsView({ enabled }: { enabled: boolean }) {
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {shops.map((shop) => (
+              <MobileCard key={shop.id}>
+                <div className="flex items-center gap-3">
+                  <button type="button" className="flex min-w-0 items-center gap-3 text-left" onClick={() => setDetailId(shop.id)}>
+                    {shop.logo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={formatImageUrl(shop.logo) || shop.logo} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                    ) : (
+                      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-xs">
+                        {(shop.name || "?").slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-white">{shop.name}</span>
+                      <span className="block truncate text-xs text-white/50">{fullName(shop.owner)}</span>
+                    </span>
+                  </button>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <dt className="text-white/40">Catégorie</dt>
+                    <dd className="text-white/80">{shop.categorieShop?.name || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Produits</dt>
+                    <dd className="text-white/80">{shop._count?.products ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Statut</dt>
+                    <dd className="mt-1 flex flex-wrap gap-1">
+                      <StatusPill active={shop.status === true} />
+                      <StatusPill active={shop.verifiedBadge === true} yes="Vérifiée" no="Non vérifiée" />
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <GhostButton
+                    onClick={() =>
+                      patchShop.mutate(
+                        { id: shop.id, body: { verifiedBadge: !shop.verifiedBadge } },
+                        { onError: (error) => notifyError(error) }
+                      )
+                    }
+                  >
+                    {shop.verifiedBadge ? "Retirer badge" : "Vérifier"}
+                  </GhostButton>
+                  <GhostButton
+                    onClick={() =>
+                      patchShop.mutate(
+                        { id: shop.id, body: { status: !shop.status } },
+                        { onError: (error) => notifyError(error) }
+                      )
+                    }
+                  >
+                    {shop.status ? "Désactiver" : "Activer"}
+                  </GhostButton>
+                  <GhostButton onClick={() => setConfirmDelete(shop.id)}>Supprimer</GhostButton>
+                </div>
+              </MobileCard>
+            ))}
+          </div>
+          </>
         )}
         {pagination ? (
           <PaginationBar

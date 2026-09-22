@@ -27,6 +27,9 @@ import {
 import { contactMerchant, respondToMessage } from '@/services/shopService';
 import { getUserErrorMessage } from '@domain/errors/app-error';
 import { useShopMerchantQuery, useShopProductsQuery, useShopQuery } from '@/hooks/queries/use-shops-query';
+import { useAddToCartMutation } from '@/hooks/mutations/use-cart-mutations';
+import { useAuthSession } from '@/hooks/use-auth-session';
+import ProductDetailModal from '@/components/ProductDetailModal';
 import MerchantProfileView from './MerchantProfileView';
 
 const ShopProfile = () => {
@@ -39,10 +42,15 @@ const ShopProfile = () => {
   const productsQuery = useShopProductsQuery(parsedShopId);
   const merchantQuery = useShopMerchantQuery(parsedShopId, shopQuery.isSuccess);
   const shop = shopQuery.data ?? null;
-  const products = productsQuery.data ?? [];
+  const products = (productsQuery.data ?? []).filter(
+    (product) => product.status !== 'DRAFT',
+  );
   const loading = (shopQuery.isPending && !shopQuery.data) || (productsQuery.isPending && !productsQuery.data);
   const error = shopQuery.isError && !shopQuery.data ? getUserErrorMessage(shopQuery.error) : null;
-  const [currentTab, setCurrentTab] = useState('products'); 
+  const [currentTab, setCurrentTab] = useState('products');
+  const { isAuthenticated, user } = useAuthSession();
+  const addToCartMutation = useAddToCartMutation();
+  const [previewProduct, setPreviewProduct] = useState(null); 
   
   // États pour le formulaire de contact
   const [contactForm, setContactForm] = useState({
@@ -148,16 +156,20 @@ const ShopProfile = () => {
     e.currentTarget.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%3E%3Crect%20fill%3D%22%23E0E0E0%22%20width%3D%22300%22%20height%3D%22200%22%2F%3E%3Ctext%20fill%3D%22%23757575%22%20font-family%3D%22Arial%2CVerdana%2CSans-serif%22%20font-size%3D%2216%22%20text-anchor%3D%22middle%22%20x%3D%22150%22%20y%3D%22100%22%3EImage%20non%20disponible%3C%2Ftext%3E%3C%2Fsvg%3E';
   };
   
-  // Fonction pour ajouter un produit au panier
-  const handleAddToCart = (product, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    alert(`Le produit "${product.name}" a été ajouté au panier.`);
-  };
-  
-  // Navigation vers un produit
-  const navigateToProduct = (productId) => {
-    navigate(`/products/${productId}`);
+  const handleAddToCart = async (product, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!isAuthenticated) {
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+    try {
+      await addToCartMutation.mutateAsync({ productId: product.id });
+    } catch (cartError) {
+      alert(getUserErrorMessage(cartError));
+    }
   };
 
   // Gestion de l'envoi de message
@@ -379,7 +391,7 @@ const ShopProfile = () => {
                     <div 
                       key={`product-${product.id}`} 
                       className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden cursor-pointer"
-                      onClick={() => navigateToProduct(product.id)}
+                      onClick={() => setPreviewProduct(product)}
                     >
                       {/* Image du produit */}
                       <div className="relative h-48 overflow-hidden bg-gray-100">
@@ -617,6 +629,26 @@ const ShopProfile = () => {
   )}
 </div>
       </div>
+      {previewProduct && (
+        <ProductDetailModal
+          product={{
+            ...previewProduct,
+            status: previewProduct.status || 'PUBLISHED',
+            shopId: previewProduct.shopId || shop?.id,
+            userId: previewProduct.userId || shop?.userId,
+            shop,
+            images: (previewProduct.images || []).map((image) => ({
+              id: image.id,
+              productId: previewProduct.id,
+              imageUrl: image.imageUrl || image.url,
+            })),
+          }}
+          isLoggedIn={isAuthenticated}
+          currentUserId={user?.id}
+          onClose={() => setPreviewProduct(null)}
+          onAddToCart={(product) => void handleAddToCart(product)}
+        />
+      )}
     </div>
   );
 };

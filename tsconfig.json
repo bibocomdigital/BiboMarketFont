@@ -44,6 +44,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-  ],
+, "../BiboMarketBack/src/infrastructure/sms/console-sms.gateway copy.ts", "../BiboMarketBack/src/infrastructure/sms/console-sms.gateway.ts", "../BiboMarketBack/src/infrastructure/sms/http-sms.gateway.ts", "../BiboMarketBack/src/infrastructure/sms/orange-auth.service.ts", "../BiboMarketBack/src/infrastructure/sms/orange-sms.gateway.ts", "../BiboMarketBack/src/infrastructure/services/bunny/bunny-storage.service.ts", "../BiboMarketBack/src/infrastructure/services/cloudinary/external-storage.service.ts", "../BiboMarketBack/src/infrastructure/email/email.service.ts", "../BiboMarketBack/src/infrastructure/services/google/google-auth.service.ts", "../BiboMarketBack/src/infrastructure/services/google/google-people.service.ts"  ],
   "exclude": ["node_modules"]
 }

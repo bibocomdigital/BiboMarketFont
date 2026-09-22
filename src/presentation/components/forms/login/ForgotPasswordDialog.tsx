@@ -1,7 +1,7 @@
 "use client";
 
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,60 +9,102 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader, AlertCircle, Check } from 'lucide-react';
 import { z } from 'zod';
-
-// API URL configuration - matching the one in authService
 import { useForgotPasswordMutation, useResetPasswordMutation } from '@/hooks/mutations/use-auth-mutations';
 
 interface ForgotPasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  resetEmail: string;
-  setResetEmail: (email: string) => void;
+  resetIdentifier: string;
+  setResetIdentifier: (identifier: string) => void;
 }
 
-// Define schemas for validation
-const emailSchema = z.string().email("Veuillez entrer une adresse email valide");
-const codeSchema = z.string().min(6, "Le code doit contenir au moins 6 caractères");
+const RESEND_COOLDOWN_SECONDS = 60;
+
+const isEmailValue = (value: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+const isPhoneValue = (value: string) =>
+  /^\+?[0-9]{9,15}$/.test(value.replace(/\s/g, ""));
+
+const identifierSchema = z.string().refine(
+  (value) => isEmailValue(value) || isPhoneValue(value),
+  {
+    message: "Veuillez saisir un email ou un téléphone valide (ex : +221771234567)",
+  }
+);
+const codeSchema = z
+  .string()
+  .regex(/^\d{6}$/, "Le code doit contenir exactement 6 chiffres");
 const passwordSchema = z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères");
 
-const ForgotPasswordDialog = ({ open, onOpenChange, resetEmail, setResetEmail }: ForgotPasswordDialogProps) => {
+const ForgotPasswordDialog = ({ open, onOpenChange, resetIdentifier, setResetIdentifier }: ForgotPasswordDialogProps) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [step, setStep] = useState<'email' | 'code' | 'password' | 'success'>('email');
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [testCode, setTestCode] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
   const forgotMutation = useForgotPasswordMutation();
   const resetMutation = useResetPasswordMutation();
   const isLoading = forgotMutation.isPending || resetMutation.isPending;
   const [error, setError] = useState<string | null>(null);
 
-  // Function to request a password reset code
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const channel = isEmailValue(resetIdentifier)
+    ? 'email'
+    : isPhoneValue(resetIdentifier)
+      ? 'phone'
+      : null;
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setTimeout(() => {
+      setResendCountdown((current) => current - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
+
+  const buildResetPayload = () => {
+    if (channel === 'email') {
+      return { email: resetIdentifier.trim(), phoneNumber: undefined };
+    }
+    if (channel === 'phone') {
+      return { phoneNumber: resetIdentifier.replace(/\s/g, ""), email: undefined };
+    }
+    return null;
+  };
+
+  const handleResetPassword = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (forgotMutation.isPending) return;
     setError(null);
-    
+
+    const validationResult = identifierSchema.safeParse(resetIdentifier);
+    if (!validationResult.success) {
+      setError("Veuillez saisir un email ou un téléphone valide");
+      return;
+    }
+
+    const payload = buildResetPayload();
+    if (!payload) return;
+
     try {
-      
-      // Validate email
-      const validationResult = emailSchema.safeParse(resetEmail);
-      if (!validationResult.success) {
-        console.error('❌ [PASSWORD RESET] Email invalide:', validationResult.error);
-        setError("Veuillez entrer une adresse email valide");
-        return;
+      const data = await forgotMutation.mutateAsync(payload);
+
+      if (data.status === "partial_success" && data.testResetCode) {
+        setTestCode(data.testResetCode);
+      } else {
+        setTestCode(null);
       }
-      
-      await forgotMutation.mutateAsync(resetEmail);
-      
-      console.log('✅ [PASSWORD RESET] Code de réinitialisation envoyé avec succès');
+      setResendCountdown(RESEND_COOLDOWN_SECONDS);
       toast({
         title: "Code envoyé",
-        description: "Si un compte existe avec cet email, vous recevrez un code de réinitialisation.",
+        description: "Si un compte existe avec cet identifiant, vous recevrez un code de réinitialisation.",
       });
-      
+
       setStep('code');
     } catch (error) {
-      
       setError(error instanceof Error ? error.message : "Une erreur est survenue lors de l'envoi du code");
       toast({
         title: "Erreur",
@@ -72,114 +114,89 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetEmail, setResetEmail }:
     }
   };
 
-  // Function to verify the reset code
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    
-    try {
-      
-      // Validate code
-      const validationResult = codeSchema.safeParse(verificationCode);
-      if (!validationResult.success) {
-        console.error('❌ [PASSWORD RESET] Code invalide:', validationResult.error);
-        setError("Le code de vérification doit contenir au moins 6 caractères");
-        return;
-      }
-      
-      // Here we only validate the code format - actual verification happens with the new password
-      setStep('password');
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Une erreur est survenue lors de la vérification du code");
+
+    const validationResult = codeSchema.safeParse(verificationCode);
+    if (!validationResult.success) {
+      setError("Le code de vérification doit contenir exactement 6 chiffres");
+      return;
     }
+
+    setStep('password');
   };
 
-  // Function to set a new password
   const handleSetNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    
+
+    const validationResult = passwordSchema.safeParse(newPassword);
+    if (!validationResult.success) {
+      setError("Le mot de passe doit contenir au moins 8 caractères");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    const request =
+      channel === 'phone'
+        ? { phone: resetIdentifier.replace(/\s/g, ""), email: undefined }
+        : { email: resetIdentifier.trim(), phone: undefined };
+
     try {
-      
-      // Validate password
-      const validationResult = passwordSchema.safeParse(newPassword);
-      if (!validationResult.success) {
-        console.error('❌ [PASSWORD RESET] Mot de passe invalide:', validationResult.error);
-        setError("Le mot de passe doit contenir au moins 8 caractères");
-        return;
-      }
-      
-      // Check if passwords match
-      if (newPassword !== confirmPassword) {
-        console.error('❌ [PASSWORD RESET] Les mots de passe ne correspondent pas');
-        setError("Les mots de passe ne correspondent pas");
-        return;
-      }
-      
       await resetMutation.mutateAsync({
-        email: resetEmail,
+        ...request,
         code: verificationCode,
         newPassword,
       });
-      
-      console.log('✅ [PASSWORD RESET] Mot de passe réinitialisé avec succès');
+
       toast({
         title: "Mot de passe réinitialisé",
         description: "Votre mot de passe a été modifié avec succès.",
       });
-      
+
       setStep('success');
-      
-      // Redirection vers la page de connexion avec un délai
-      console.log('🔄 [PASSWORD RESET] Préparation de la redirection dans 2 secondes...');
+
       setTimeout(() => {
-        console.log('🔄 [PASSWORD RESET] Exécution de la redirection...');
         handleClose();
         navigate('/login');
       }, 2000);
-      
     } catch (error) {
-      console.error('❌ [PASSWORD RESET] Erreur détaillée de réinitialisation:', error);
-      console.error('❌ [PASSWORD RESET] Type d\'erreur:', typeof error);
-      console.error('❌ [PASSWORD RESET] Message d\'erreur:', error instanceof Error ? error.message : String(error));
-      
-      // Handle specific error cases
-      if (error instanceof Error) {
-        if (error.message.includes("Code de réinitialisation incorrect")) {
-          console.log('🔄 [PASSWORD RESET] Code incorrect détecté, retour à l\'étape de saisie du code');
-          setError("Code de vérification incorrect. Veuillez vérifier et réessayer.");
-          setStep('code'); // Return to code step
-          setVerificationCode(''); // Clear the code
-        } else if (error.message.includes("Code de réinitialisation expiré")) {
-          console.log('🔄 [PASSWORD RESET] Code expiré détecté, retour à l\'étape de demande de code');
-          setError("Le code de réinitialisation a expiré. Veuillez demander un nouveau code.");
-          setStep('email'); // Return to email step
-          setVerificationCode(''); // Clear the code
-        } else {
-          setError(error.message);
-        }
+      const message = error instanceof Error ? error.message : "Une erreur est survenue";
+
+      if (message.includes("incorrect")) {
+        setError("Code de vérification incorrect. Veuillez vérifier et réessayer.");
+        setStep('code');
+        setVerificationCode('');
+      } else if (message.includes("expiré")) {
+        setError("Le code de réinitialisation a expiré. Veuillez demander un nouveau code.");
+        setStep('email');
+        setVerificationCode('');
       } else {
-        setError("Une erreur est survenue lors de la réinitialisation du mot de passe");
+        setError(message);
       }
-      
+
       toast({
         title: "Erreur",
-        description: error instanceof Error ? error.message : "Une erreur est survenue",
+        description: message,
         variant: "destructive",
       });
     }
   };
 
   const handleClose = () => {
-    console.log('🔄 [PASSWORD RESET] Fermeture de la boîte de dialogue');
     onOpenChange(false);
-    // Reset state when dialog closes
     setStep('email');
     setVerificationCode('');
     setNewPassword('');
     setConfirmPassword('');
     setError(null);
-    console.log('🔄 [PASSWORD RESET] État de la boîte de dialogue réinitialisé');
+    setTestCode(null);
+    setResendCountdown(0);
   };
 
   return (
@@ -193,27 +210,26 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetEmail, setResetEmail }:
             {step === 'success' && "Réinitialisation réussie"}
           </DialogTitle>
         </DialogHeader>
-        
+
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center mb-4">
             <AlertCircle size={16} className="mr-2 flex-shrink-0" />
             <p className="text-sm">{error}</p>
           </div>
         )}
-        
+
         {step === 'email' ? (
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="reset-email" className="text-sm font-medium">Email</label>
-              <Input 
-                id="reset-email" 
-                placeholder="Votre adresse email" 
-                type="text" 
-                value={resetEmail}
-                onChange={(e) => {
-                  console.log('🔄 [PASSWORD RESET] Mise à jour de l\'email:', e.target.value);
-                  setResetEmail(e.target.value);
-                }}
+              <label htmlFor="reset-identifier" className="text-sm font-medium">
+                Email ou téléphone
+              </label>
+              <Input
+                id="reset-identifier"
+                placeholder="Ex : +221771234567 ou votre@email.com"
+                type="text"
+                value={resetIdentifier}
+                onChange={(e) => setResetIdentifier(e.target.value)}
                 disabled={isLoading}
               />
               <p className="text-sm text-gray-500">
@@ -221,9 +237,9 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetEmail, setResetEmail }:
               </p>
             </div>
             <div className="flex justify-end space-x-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={handleClose}
                 disabled={isLoading}
               >
@@ -244,25 +260,33 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetEmail, setResetEmail }:
         ) : step === 'code' ? (
           <form onSubmit={handleVerifyCode} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="verification-code" className="text-sm font-medium">Code de vérification</label>
-              <Input 
-                id="verification-code" 
-                placeholder="Entrez le code reçu par email" 
+              <label htmlFor="verification-code" className="text-sm font-medium">
+                Code de vérification
+              </label>
+              <Input
+                id="verification-code"
+                placeholder="Le code à 6 chiffres"
+                inputMode="numeric"
+                maxLength={6}
                 value={verificationCode}
                 onChange={(e) => {
-                  console.log('🔄 [PASSWORD RESET] Mise à jour du code:', e.target.value);
-                  setVerificationCode(e.target.value);
+                  setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6));
                 }}
                 disabled={isLoading}
               />
               <p className="text-sm text-gray-500">
-                Entrez le code que nous avons envoyé à {resetEmail}
+                Entrez le code que nous avons envoyé à {resetIdentifier}
               </p>
+              {testCode && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-md text-sm">
+                  Environnement de test : utilisez le code <strong>{testCode}</strong>
+                </div>
+              )}
             </div>
             <div className="flex justify-end space-x-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={handleClose}
                 disabled={isLoading}
               >
@@ -279,42 +303,52 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetEmail, setResetEmail }:
                 )}
               </Button>
             </div>
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleResetPassword()}
+                disabled={resendCountdown > 0 || forgotMutation.isPending}
+              >
+                {resendCountdown > 0
+                  ? `Renvoyer le code (${resendCountdown}s)`
+                  : "Renvoyer le code"}
+              </Button>
+            </div>
           </form>
         ) : step === 'password' ? (
           <form onSubmit={handleSetNewPassword} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="new-password" className="text-sm font-medium">Nouveau mot de passe</label>
-              <Input 
-                id="new-password" 
+              <label htmlFor="new-password" className="text-sm font-medium">
+                Nouveau mot de passe
+              </label>
+              <Input
+                id="new-password"
                 type="password"
-                placeholder="Votre nouveau mot de passe" 
+                placeholder="Votre nouveau mot de passe"
                 value={newPassword}
-                onChange={(e) => {
-                  console.log('🔄 [PASSWORD RESET] Mise à jour du nouveau mot de passe (longueur):', e.target.value.length);
-                  setNewPassword(e.target.value);
-                }}
+                onChange={(e) => setNewPassword(e.target.value)}
                 disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="confirm-password" className="text-sm font-medium">Confirmer le mot de passe</label>
-              <Input 
-                id="confirm-password" 
+              <label htmlFor="confirm-password" className="text-sm font-medium">
+                Confirmer le mot de passe
+              </label>
+              <Input
+                id="confirm-password"
                 type="password"
-                placeholder="Confirmez votre mot de passe" 
+                placeholder="Confirmez votre mot de passe"
                 value={confirmPassword}
-                onChange={(e) => {
-                  console.log('🔄 [PASSWORD RESET] Mise à jour de la confirmation du mot de passe');
-                  console.log('🔄 [PASSWORD RESET] Les mots de passe correspondent:', newPassword === e.target.value);
-                  setConfirmPassword(e.target.value);
-                }}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={isLoading}
               />
             </div>
             <div className="flex justify-end space-x-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={handleClose}
                 disabled={isLoading}
               >

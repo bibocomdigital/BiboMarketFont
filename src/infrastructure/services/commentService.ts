@@ -3,7 +3,9 @@
  */
 
 // Importer les fonctions du service de configuration
-import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { backendUrl, getAuthToken, getAuthHeaders } from './configService';
+import { unwrapPaged, unwrapRecord } from '../api/api-envelope';
+import { parseApiError } from '../api/fetch-error';
 
 // Types pour les commentaires
 export interface Comment {
@@ -150,22 +152,14 @@ export const addComment = async (productId: number, commentData: NewComment): Pr
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [COMMENTS] Erreur lors de l\'ajout du commentaire:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de l\'ajout du commentaire');
+      throw await parseApiError(response, "Erreur lors de l'ajout du commentaire");
     }
-    
-    const data = await response.json();
-    console.log('✅ [COMMENTS] Commentaire ajouté avec succès');
-    console.log('🆔 [COMMENTS] ID du commentaire créé:', data.comment.id);
-    
-    return data;
+
+    const data = unwrapRecord(await response.json());
+    return {
+      message: typeof data.message === 'string' ? data.message : 'Commentaire ajouté',
+      comment: data.comment as Comment,
+    };
   } catch (error) {
     console.error('❌ [COMMENTS] Erreur:', error);
     throw error;
@@ -191,28 +185,23 @@ export const getProductComments = async (productId: number, page: number = 1, li
     console.log('📊 [COMMENTS] Statut de la réponse de récupération:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('❌ [COMMENTS] Erreur lors de la récupération des commentaires:', 
-        errorData.message || response.statusText);
-      
-      // Si erreur, retourner un objet avec tableau vide et pagination par défaut
       return {
         comments: [],
         pagination: {
           total: 0,
-          page: page,
-          limit: limit,
-          totalPages: 0
-        }
+          page,
+          limit,
+          totalPages: 0,
+        },
       };
     }
-    
-    const data = await response.json();
-    console.log('✅ [COMMENTS] Commentaires récupérés avec succès');
-    console.log('📊 [COMMENTS] Nombre de commentaires:', data.comments.length);
-    console.log('📊 [COMMENTS] Total:', data.pagination.total, '- Pages:', data.pagination.totalPages);
-    
-    return data;
+
+    const { items, pagination } = unwrapPaged<Comment>(
+      await response.json(),
+      'comments',
+      { page, limit },
+    );
+    return { comments: items, pagination };
   } catch (error) {
     console.error('❌ [COMMENTS] Erreur lors de la récupération des commentaires:', error);
     
@@ -264,22 +253,14 @@ export const replyToComment = async (commentId: number, replyData: NewReply): Pr
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [COMMENTS] Erreur lors de l\'ajout de la réponse:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de l\'ajout de la réponse');
+      throw await parseApiError(response, "Erreur lors de l'ajout de la réponse");
     }
-    
-    const data = await response.json();
-    console.log('✅ [COMMENTS] Réponse ajoutée avec succès');
-    console.log('🆔 [COMMENTS] ID de la réponse créée:', data.reply.id);
-    
-    return data;
+
+    const data = unwrapRecord(await response.json());
+    return {
+      message: typeof data.message === 'string' ? data.message : 'Réponse ajoutée',
+      reply: data.reply as Reply,
+    };
   } catch (error) {
     console.error('❌ [COMMENTS] Erreur:', error);
     throw error;
@@ -321,21 +302,14 @@ export const updateComment = async (commentId: number, commentData: NewComment):
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [COMMENTS] Erreur lors de la mise à jour du commentaire:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de la mise à jour du commentaire');
+      throw await parseApiError(response, 'Erreur lors de la mise à jour du commentaire');
     }
-    
-    const data = await response.json();
-    console.log('✅ [COMMENTS] Commentaire mis à jour avec succès');
-    
-    return data;
+
+    const data = unwrapRecord(await response.json());
+    return {
+      message: typeof data.message === 'string' ? data.message : 'Commentaire mis à jour',
+      comment: data.comment as Comment,
+    };
   } catch (error) {
     console.error('❌ [COMMENTS] Erreur:', error);
     throw error;
@@ -374,21 +348,13 @@ export const deleteComment = async (commentId: number): Promise<DeleteResponse> 
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [COMMENTS] Erreur lors de la suppression du commentaire:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de la suppression du commentaire');
+      throw await parseApiError(response, 'Erreur lors de la suppression du commentaire');
     }
-    
-    const data = await response.json();
-    console.log('✅ [COMMENTS] Commentaire supprimé avec succès');
-    
-    return data;
+
+    const data = unwrapRecord(await response.json());
+    return {
+      message: typeof data.message === 'string' ? data.message : 'Commentaire supprimé',
+    };
   } catch (error) {
     console.error('❌ [COMMENTS] Erreur:', error);
     throw error;
@@ -427,21 +393,13 @@ export const deleteReply = async (replyId: number): Promise<DeleteResponse> => {
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [COMMENTS] Erreur lors de la suppression de la réponse:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de la suppression de la réponse');
+      throw await parseApiError(response, 'Erreur lors de la suppression de la réponse');
     }
-    
-    const data = await response.json();
-    console.log('✅ [COMMENTS] Réponse supprimée avec succès');
-    
-    return data;
+
+    const data = unwrapRecord(await response.json());
+    return {
+      message: typeof data.message === 'string' ? data.message : 'Réponse supprimée',
+    };
   } catch (error) {
     console.error('❌ [COMMENTS] Erreur:', error);
     throw error;
@@ -484,7 +442,7 @@ export const canEditComment = (comment: Comment): boolean => {
     }
     
     const user = JSON.parse(userStr);
-    const canEdit = user.id === comment.userId;
+    const canEdit = Number(user.id) === Number(comment.userId);
     
     console.log('🔍 [COMMENTS] Vérification des droits d\'édition:', {
       userId: user.id,
@@ -513,7 +471,7 @@ export const canDeleteComment = (comment: Comment): boolean => {
     }
     
     const user = JSON.parse(userStr);
-    const canDelete = user.id === comment.userId;
+    const canDelete = Number(user.id) === Number(comment.userId);
     
     console.log('🔍 [COMMENTS] Vérification des droits de suppression:', {
       userId: user.id,

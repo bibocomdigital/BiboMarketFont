@@ -32,9 +32,25 @@ type LoginFormContentProps = {
   onClose?: () => void;
 };
 
+const LOGIN_SAVED_KEY = "bibocom_login_identifier";
+
+const isEmailValue = (value: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+const isPhoneValue = (value: string) =>
+  /^\+?[0-9]{9,15}$/.test(value.replace(/\s/g, ""));
+
+const isEmailOrPhone = (value: string) =>
+  isEmailValue(value) || isPhoneValue(value);
+
 // Schéma de validation pour email ou téléphone
 const LoginFormSchema = z.object({
-  login: z.string().min(1, "L'email ou le téléphone est requis"),
+  login: z
+    .string()
+    .min(2, "Saisissez votre email ou votre téléphone")
+    .refine((value) => isEmailOrPhone(value), {
+      message: "Format invalide : email ou téléphone valide requis (ex : +221771234567)",
+    }),
   password: z.string().min(1, "Le mot de passe est requis"),
   rememberMe: z.boolean().default(true),
 });
@@ -46,7 +62,7 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
   const loginMutation = useLoginMutation();
   const isSubmitting = loginMutation.isPending;
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
+  const [resetIdentifier, setResetIdentifier] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginType, setLoginType] = useState<"email" | "phone">("phone");
   const navigate = useNavigate();
@@ -63,23 +79,24 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
   useEffect(() => {
     if (initialEmail) {
       form.setValue("login", initialEmail);
-      // Déterminer le type en fonction de l'input initial
-      const isPhone = /^[\+]?[1-9][\d]{0,15}$/.test(
-        initialEmail.replace(/\D/g, "")
-      );
-      setLoginType(isPhone ? "phone" : "email");
+      setLoginType(isPhoneValue(initialEmail) ? "phone" : "email");
+      return;
+    }
+
+    // Restaurer l'identifiant mémorisé via "Se souvenir de moi"
+    const saved = localStorage.getItem(LOGIN_SAVED_KEY);
+    if (saved) {
+      form.setValue("login", saved);
+      setLoginType(isPhoneValue(saved) ? "phone" : "email");
     }
   }, [initialEmail, form]);
 
-  // Effacer l'erreur quand l'utilisateur commence à retaper
-  useEffect(() => {
-    const subscription = form.watch(() => {
-      if (loginError) {
-        setLoginError(null);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, loginError]);
+  // Effacer l'erreur de connexion dès que l'utilisateur modifie ses identifiants
+  const clearLoginError = () => {
+    if (loginError) {
+      setLoginError(null);
+    }
+  };
 
   const toggleLoginType = () => {
     setLoginType(loginType === "email" ? "phone" : "email");
@@ -107,6 +124,14 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
       console.log("📤 [LOGIN] Données envoyées:", loginData);
 
       const response = await loginMutation.mutateAsync(loginData);
+
+      // "Se souvenir de moi" : mettre à jour l'identifiant mémorisé
+      if (values.rememberMe) {
+        localStorage.setItem(LOGIN_SAVED_KEY, values.login.trim());
+      } else {
+        localStorage.removeItem(LOGIN_SAVED_KEY);
+      }
+
       navigate(dashboardPathFor(response.user.role));
 
       if (onClose) {
@@ -145,9 +170,25 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
               </FormLabel>
               <FormControl>
                 {loginType === "phone" ? (
-                  <PhoneInput form={form} field={field} />
+                  <PhoneInput
+                    form={form}
+                    field={{
+                      ...field,
+                      onChange: (value: string) => {
+                        clearLoginError();
+                        field.onChange(value);
+                      },
+                    }}
+                  />
                 ) : (
-                  <EmailInput {...field} className={fieldClassName} />
+                  <EmailInput
+                    {...field}
+                    className={fieldClassName}
+                    onChange={(event) => {
+                      clearLoginError();
+                      field.onChange(event);
+                    }}
+                  />
                 )}
               </FormControl>
               <button
@@ -173,7 +214,14 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
                 Mot de passe
               </FormLabel>
               <FormControl>
-                <PasswordInput {...field} className={fieldClassName} />
+                <PasswordInput
+                  {...field}
+                  className={fieldClassName}
+                  onChange={(event) => {
+                    clearLoginError();
+                    field.onChange(event);
+                  }}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -208,11 +256,7 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
             className="text-sm text-slate-500 hover:text-bibocom-primary transition-colors duration-300"
             onClick={() => {
               const currentLogin = form.getValues().login;
-              if (currentLogin.includes("@")) {
-                setResetEmail(currentLogin);
-              } else {
-                setResetEmail("");
-              }
+              setResetIdentifier(currentLogin || "");
               setShowForgotPassword(true);
             }}
           >
@@ -263,8 +307,8 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
       <ForgotPasswordDialog
         open={showForgotPassword}
         onOpenChange={setShowForgotPassword}
-        resetEmail={resetEmail}
-        setResetEmail={setResetEmail}
+        resetIdentifier={resetIdentifier}
+        setResetIdentifier={setResetIdentifier}
       />
     </Form>
   );

@@ -82,7 +82,7 @@ export function ClientOverview({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi icon={Package} label="Commandes totales" value={stats.totalOrders} hint="Hors annulées" loading={loading} />
         <Kpi icon={CreditCard} label="Total dépensé" value={formatFcfa(stats.totalSpent)} hint="Commandes validées" loading={loading} />
-        <Kpi icon={Heart} label="Articles favoris" value={17} />
+        <Kpi icon={Heart} label="Articles favoris" value={0} hint="Bientôt disponible" />
         <Kpi icon={Clock} label="En attente" value={stats.pendingOrders} hint="Statut PENDING" loading={loading} />
       </div>
 

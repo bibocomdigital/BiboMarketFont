@@ -21,6 +21,7 @@ import {
   AdminSelect,
   ConfirmBar,
   GhostButton,
+  MobileCard,
   PaginationBar,
   Panel,
   StateMessage,
@@ -188,7 +189,8 @@ export function AdminOrdersView({
         ) : orders.length === 0 ? (
           <StateMessage>Aucune commande trouvée.</StateMessage>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-white/5">
@@ -245,6 +247,52 @@ export function AdminOrdersView({
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {orders.map((order) => (
+              <MobileCard key={order.id}>
+                <div className="flex items-center justify-between gap-3">
+                  <GhostButton onClick={() => onSelectOrder(order.id)}>#{order.id}</GhostButton>
+                  <span className="text-xs text-white/50">{formatDateFr(order.createdAt)}</span>
+                </div>
+                <p className="mt-3 text-sm font-medium text-white">{fullName(order.client)}</p>
+                <p className="mt-1 text-xs text-white/60">
+                  {(order.orderItems || [])
+                    .map((item) => `${item.product?.name || "Produit"} (${item.product?.shop?.name || "—"})`)
+                    .join(", ") || "—"}
+                </p>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className="text-sm text-white/80">{formatFcfa(order.totalAmount)}</span>
+                  <span className="text-xs text-white/50">{paymentLabel(order.paymentMethod)}</span>
+                </div>
+                <div className="mt-3">
+                  <AdminSelect
+                    className="w-full"
+                    value={String(order.status)}
+                    onChange={(event) =>
+                      patchStatus.mutate(
+                        { id: order.id, status: event.target.value },
+                        {
+                          onError: (error) =>
+                            toast({
+                              title: "Statut non mis à jour",
+                              description: getUserErrorMessage(error),
+                              variant: "destructive",
+                            }),
+                        }
+                      )
+                    }
+                  >
+                    {ORDER_STATUSES.map((item) => (
+                      <option key={item} value={item}>
+                        {orderStatusLabel(item)}
+                      </option>
+                    ))}
+                  </AdminSelect>
+                </div>
+              </MobileCard>
+            ))}
+          </div>
+          </>
         )}
         {pagination ? (
           <PaginationBar

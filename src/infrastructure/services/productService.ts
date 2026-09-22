@@ -49,6 +49,10 @@ export interface Product {
   userId: number;
   shop?: Shop;
   images: ProductImage[];
+  likesCount?: number;
+  commentsCount?: number;
+  sharesCount?: number;
+  isLiked?: boolean;
   _count?: {
     likes: number;
     comments: number;
@@ -341,6 +345,51 @@ export const updateProduct = async (productId: number, productData: FormData): P
     const data = await response.json();
     console.log('✅ [PRODUCT] Produit mis à jour avec succès:', data.product.name);
     
+    return data.product;
+  } catch (error) {
+    console.error('❌ [PRODUCT] Erreur:', error);
+    throw error;
+  }
+};
+
+/**
+ * Met à jour un produit avec gestion des images et de la vidéo
+ * (ajout/suppression d'images, remplacement de la vidéo)
+ * @param {number} productId L'ID du produit à mettre à jour
+ * @param {FormData} productData Les nouvelles données du produit (fichiers inclus)
+ * @returns {Promise<Product>} Le produit mis à jour
+ */
+export const updateProductWithImages = async (
+  productId: number,
+  productData: FormData
+): Promise<Product> => {
+  try {
+    console.log(`🔄 [PRODUCT] Mise à jour (images/vidéo) du produit ID ${productId}`);
+
+    if (!isAuthenticated()) {
+      throw new Error('Vous devez être connecté pour mettre à jour un produit');
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('Vous devez être connecté pour mettre à jour un produit');
+    }
+
+    const response = await fetch(`${backendUrl}/produit/${productId}/update-with-images`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: productData
+    });
+
+    if (!response.ok) {
+      throw await parseApiError(response, 'Erreur lors de la mise à jour du produit');
+    }
+
+    const data = await response.json();
+    console.log('✅ [PRODUCT] Produit mis à jour avec succès:', data.product?.name);
+
     return data.product;
   } catch (error) {
     console.error('❌ [PRODUCT] Erreur:', error);

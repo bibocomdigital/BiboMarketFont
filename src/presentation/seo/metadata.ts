@@ -175,6 +175,11 @@ export const pageSeo = {
     path: "/verify-code",
     robots: "private",
   }),
+  verifyPhone: buildPageMetadata({
+    title: "Vérification du téléphone",
+    path: "/verify-phone",
+    robots: "private",
+  }),
   verificationPending: buildPageMetadata({
     title: "Vérification en cours",
     path: "/verification-pending",

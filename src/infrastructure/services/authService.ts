@@ -33,6 +33,8 @@ export interface User {
   photo?: string;
   phoneNumber?: string;
   isVerified: boolean;
+  phoneVerified?: boolean;
+  googleId?: string | null;
   country?: string;
   city?: string;
   department?: string;
@@ -73,6 +75,8 @@ export interface ProfileData {
   bio?: string;
   birthdate?: string;
   role?: string;
+  phoneVerified?: boolean;
+  googleId?: string | null;
 }
 
 /**
@@ -137,7 +141,7 @@ export const registerUser = async (formData: FormData): Promise<{
 }> => {
   try {
     // S'assurer que tous les champs requis sont présents dans le FormData
-    const requiredFields = ['email', 'password', 'firstName', 'lastName', 'role'];
+    const requiredFields = ['phoneNumber', 'password', 'firstName', 'lastName', 'role'];
     for (const field of requiredFields) {
       if (!formData.get(field)) {
         throw new Error(`Le champ ${field} est requis pour l'inscription`);
@@ -151,7 +155,6 @@ export const registerUser = async (formData: FormData): Promise<{
     }
 
     const payload = {
-      email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
       firstName: String(formData.get("firstName") ?? ""),
       lastName: String(formData.get("lastName") ?? ""),
@@ -177,9 +180,10 @@ export const registerUser = async (formData: FormData): Promise<{
     }
 
     const data = unwrapRecord(await response.json());
+    const user = (data.user ?? {}) as { email?: string };
     return {
       message: String(data.message ?? 'Inscription réussie'),
-      email: String(data.email ?? payload.email),
+      email: String(user.email ?? ''),
     };
   } catch (error) {
     console.error('Erreur lors de l\'inscription:', error);
@@ -388,6 +392,34 @@ export const login = async (credentials: { email?: string; password: string, pho
   }
 };
 
+export const loginWithGoogle = async (
+  idToken: string,
+): Promise<{ token: string; user: User; needsCompletion: boolean }> => {
+  const response = await fetch(`${API_URL}/auth/google-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(errorData, 'Erreur lors de la connexion Google'));
+  }
+
+  const raw = await response.json();
+  const payload = unwrapRecord(raw);
+  const { token, user } = unwrapAuthSession<User>(raw);
+  localStorage.setItem('token', token);
+  localStorage.setItem('user', JSON.stringify(user));
+  notifyAuthChanged();
+
+  return {
+    token,
+    user,
+    needsCompletion: payload.needsCompletion === true,
+  };
+};
+
 /**
  * Déconnecte l'utilisateur
  */
@@ -560,11 +592,20 @@ export const changePassword = async (
   return { message: typeof payload.message === "string" ? payload.message : "Mot de passe mis à jour." };
 };
 
-export const requestPasswordReset = async (email: string): Promise<{ message?: string }> => {
+export const requestPasswordReset = async (input: {
+  email?: string;
+  phoneNumber?: string;
+}): Promise<{
+  message?: string;
+  status?: string;
+  testResetCode?: string;
+  email?: string;
+  phoneNumber?: string;
+}> => {
   const response = await fetch(`${API_URL}/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(input),
   });
   const data = await response.json();
   if (!response.ok) {
@@ -573,21 +614,97 @@ export const requestPasswordReset = async (email: string): Promise<{ message?: s
   return data;
 };
 
-export const resetPassword = async (
-  email: string,
-  code: string,
-  newPassword: string
-): Promise<{ message?: string }> => {
+export const resetPassword = async (input: {
+  email?: string;
+  phone?: string;
+  code: string;
+  newPassword: string;
+}): Promise<{ message?: string }> => {
   const response = await fetch(`${API_URL}/auth/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, resetCode: code, newPassword }),
+    body: JSON.stringify({
+      email: input.email,
+      phone: input.phone,
+      resetCode: input.code,
+      newPassword: input.newPassword,
+    }),
   });
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.message || "Une erreur est survenue");
   }
   return data;
+};
+
+function requireToken(): string {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  if (!token) {
+    throw new AppError("Votre session a expiré. Veuillez vous reconnecter.", "UNAUTHORIZED", 401);
+  }
+  return token;
+}
+
+/**
+ * Envoie un code de vérification SMS au numéro du compte connecté
+ */
+export const sendPhoneVerificationCode = async (): Promise<{
+  message: string;
+  phoneNumber?: string;
+  expiresAt?: string;
+  testCode?: string;
+}> => {
+  const response = await fetch(`${API_URL}/auth/phone/send-code`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${requireToken()}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Impossible d'envoyer le code de vérification");
+  }
+
+  const payload = unwrapRecord(await response.json());
+  return {
+    message: typeof payload.message === "string" ? payload.message : "Code envoyé.",
+    phoneNumber: typeof payload.phoneNumber === "string" ? payload.phoneNumber : undefined,
+    expiresAt: typeof payload.expiresAt === "string" ? payload.expiresAt : undefined,
+    testCode: typeof payload.testCode === "string" ? payload.testCode : undefined,
+  };
+};
+
+/**
+ * Vérifie le code SMS reçu pour le numéro du compte connecté
+ */
+export const verifyPhoneCode = async (code: string): Promise<{
+  message: string;
+  phoneVerified: boolean;
+}> => {
+  const response = await fetch(`${API_URL}/auth/phone/verify`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${requireToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ code }),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "La vérification du numéro a échoué");
+  }
+
+  const payload = unwrapRecord(await response.json());
+
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  localStorage.setItem("user", JSON.stringify({ ...currentUser, phoneVerified: true }));
+  notifyAuthChanged();
+
+  return {
+    message: typeof payload.message === "string" ? payload.message : "Numéro vérifié.",
+    phoneVerified: true,
+  };
 };
 
 export const getUserById = async (userId: string | number) => {

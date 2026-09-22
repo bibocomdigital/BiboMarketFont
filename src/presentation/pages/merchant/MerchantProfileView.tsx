@@ -146,30 +146,29 @@ export function MerchantProfileView() {
                   {(display.lastName[0] || "").toUpperCase()}
                 </div>
               )}
-              {editing ? (
-                <>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      setAvatarFile(file);
-                      setAvatarPreview(URL.createObjectURL(file));
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="absolute bottom-0 right-0 rounded-full bg-bibocom-accent p-1.5 text-white"
-                    onClick={() => fileRef.current?.click()}
-                    aria-label="Changer la photo"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </button>
-                </>
-              ) : null}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  setAvatarFile(file);
+                  setAvatarPreview(URL.createObjectURL(file));
+                }}
+              />
+              <button
+                type="button"
+                className="absolute bottom-0 right-0 rounded-full bg-bibocom-accent p-1.5 text-white shadow-md transition-colors hover:bg-bibocom-primary"
+                onClick={() => {
+                  if (!editing) setEditing(true);
+                  fileRef.current?.click();
+                }}
+                aria-label="Changer la photo"
+              >
+                <Camera className="h-4 w-4" />
+              </button>
             </div>
             <h2 className="text-lg font-semibold">
               {display.firstName} {display.lastName}

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form } from "@/components/ui/form";
 import { useNavigate, useLocation } from "react-router-dom";
 import RegisterStep1 from "./register/RegisterStep1";
+import SocialLoginButton from "./login/SocialLoginButton";
 import {
   registerUser as apiRegisterUser,
   login,
@@ -20,15 +21,33 @@ const formSchema = z
   .object({
     firstName: z
       .string()
-      .min(2, { message: "Le prénom doit contenir au moins 2 caractères" }),
+      .trim()
+      .min(2, { message: "Le prénom doit contenir au moins 2 caractères" })
+      .max(50, { message: "Le prénom est trop long (50 caractères max)" })
+      .regex(/^[A-Za-zÀ-ÿ' -]+$/, {
+        message: "Le prénom ne peut contenir que des lettres",
+      }),
     lastName: z
       .string()
-      .min(2, { message: "Le nom doit contenir au moins 2 caractères" }),
-    phoneNumber: z.string().min(9, { message: "Numéro de téléphone invalide" }),
-    password: z.string().min(6, {
-      message: "Le mot de passe doit contenir au moins 6 caractères",
-    }),
-    email: z.string().email({ message: "Veuillez entrer une adresse email valide" }),
+      .trim()
+      .min(2, { message: "Le nom doit contenir au moins 2 caractères" })
+      .max(50, { message: "Le nom est trop long (50 caractères max)" })
+      .regex(/^[A-Za-zÀ-ÿ' -]+$/, {
+        message: "Le nom ne peut contenir que des lettres",
+      }),
+    phoneNumber: z
+      .string()
+      .regex(/^\+?[0-9]{9,15}$/, {
+        message: "Numéro de téléphone invalide (ex : +221771234567)",
+      }),
+    password: z
+      .string()
+      .min(6, {
+        message: "Le mot de passe doit contenir au moins 6 caractères",
+      })
+      .max(64, {
+        message: "Le mot de passe ne peut pas dépasser 64 caractères",
+      }),
     confirmPassword: z
       .string()
       .min(1, { message: "Veuillez confirmer votre mot de passe" }),
@@ -70,7 +89,6 @@ const RegisterForm = ({
       lastName: "",
       phoneNumber: "",
       password: "",
-      email: "",
       confirmPassword: "",
       role: initialRole,
     },
@@ -128,20 +146,29 @@ const RegisterForm = ({
   }, [location.search]);
 
   // Charger les données sauvegardées du formulaire
+  // Ordre de priorité : paramètre URL ?role= > cache localStorage > valeur par défaut
   useEffect(() => {
     const savedFormData = localStorage.getItem("registerFormData");
-    if (savedFormData) {
-      try {
-        const parsedData = JSON.parse(savedFormData);
+    if (!savedFormData) {
+      return;
+    }
 
-        Object.entries(parsedData).forEach(([key, value]) => {
-          if (key !== "confirmPassword") {
-            form.setValue(key as any, value as any);
+    try {
+      const parsedData = JSON.parse(savedFormData);
+      const roleParam = new URLSearchParams(window.location.search).get("role");
+
+Object.entries(parsedData).forEach(([key, value]) => {
+          if (key === "confirmPassword" || key === "email") {
+            return;
           }
+          if (key === "role" && roleParam) {
+            return;
+          }
+          const fieldName = key as keyof RegisterFormValues;
+          form.setValue(fieldName, value as RegisterFormValues[typeof fieldName]);
         });
-      } catch (error) {
-        console.error("Error loading saved form data:", error);
-      }
+    } catch (error) {
+      console.error("Error loading saved form data:", error);
     }
   }, []);
 
@@ -157,11 +184,6 @@ const RegisterForm = ({
 
     return () => subscription.unsubscribe();
   }, [form.watch]);
-
-  // S'assurer que le rôle initial est correctement défini
-  useEffect(() => {
-    form.setValue("role", initialRole);
-  }, [initialRole, form]);
 
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -193,13 +215,17 @@ const RegisterForm = ({
 
       try {
         const session = await login({
-          email: data.email,
+          phoneNumber: data.phoneNumber,
           password: data.password,
         });
-        navigate(dashboardPathFor(session.user.role));
+        if (session.user.role !== UserRole.ADMIN) {
+          navigate("/verify-phone");
+        } else {
+          navigate(dashboardPathFor(session.user.role));
+        }
       } catch {
         navigate("/login", {
-          state: { initialEmail: data.email },
+          state: { initialEmail: data.phoneNumber },
         });
       }
 
@@ -209,9 +235,7 @@ const RegisterForm = ({
         error instanceof Error ? error.message : "Une erreur est survenue";
       const lower = message.toLowerCase();
 
-      if (/email|e-mail|mail/.test(lower)) {
-        form.setError("email", { type: "server", message });
-      } else if (/téléphone|telephone|phone/.test(lower)) {
+      if (/téléphone|telephone|phone/.test(lower)) {
         form.setError("phoneNumber", { type: "server", message });
       } else if (/mot de passe|password/.test(lower)) {
         form.setError("password", { type: "server", message });
@@ -229,6 +253,23 @@ const RegisterForm = ({
         <RegisterStep1
           form={form}
           isSubmitting={isSubmitting}
+        />
+
+        <div className="relative py-1">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-200"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="bg-white px-3 text-slate-400">
+              Ou continuer avec
+            </span>
+          </div>
+        </div>
+
+        <SocialLoginButton
+          provider="google"
+          onClose={onClose}
+          className="h-12 rounded-xl border-slate-200 text-slate-700 transition-all duration-300 hover:bg-slate-50 hover:border-slate-300"
         />
       </form>
     </Form>

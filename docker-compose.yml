@@ -26,6 +26,9 @@ services:
       - bibomarket-network
 
   backend:
+    build:
+      context: ../BiboMarketBack
+      target: prod
     image: bibocomdigital/bibomarket-backend-develop:latest
     env_file:
       - .env.backend

@@ -3,8 +3,33 @@
  */
 
 // Importer les fonctions du service de configuration
-import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
-import { unwrapList } from '../api/api-envelope';
+import { backendUrl, getAuthToken, getAuthHeaders } from './configService';
+import { unwrapPaged, unwrapRecord } from '../api/api-envelope';
+import { parseApiError } from '../api/fetch-error';
+
+function asToggleResponse(raw: unknown): ToggleLikeResponse {
+  const data = unwrapRecord(raw);
+  return {
+    message: typeof data.message === 'string' ? data.message : 'Réaction mise à jour',
+    action: typeof data.action === 'string' ? data.action : 'toggled',
+    likesCount: Number(data.likesCount ?? 0),
+    dislikesCount: Number(data.dislikesCount ?? 0),
+  };
+}
+
+function asUserReaction(raw: unknown): UserReaction {
+  const data = unwrapRecord(raw);
+  if (typeof data.hasLiked === 'boolean' || typeof data.hasDisliked === 'boolean') {
+    return {
+      hasLiked: Boolean(data.hasLiked),
+      hasDisliked: Boolean(data.hasDisliked),
+    };
+  }
+  return {
+    hasLiked: data.hasReaction === true && data.type === 'LIKE',
+    hasDisliked: data.hasReaction === true && data.type === 'DISLIKE',
+  };
+}
 
 // Types pour les likes et réactions
 export enum ReactionType {
@@ -117,30 +142,10 @@ export const toggleProductLike = async (productId: number): Promise<ToggleLikeRe
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [LIKES] Erreur lors du toggle like:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de la gestion du like');
+      throw await parseApiError(response, 'Erreur lors de la gestion du like');
     }
-    
-    const data = await response.json();
-    console.log('✅ [LIKES] Toggle like effectué avec succès');
-    console.log('🎬 [LIKES] Action effectuée:', data.action);
-    
-    // Après un like/unlike, récupérer le nouveau nombre de likes et dislikes
-    const likesCountResult = await getProductLikesCount(productId);
-    
-    return {
-      message: data.message || "Like ajouté/retiré avec succès",
-      action: data.action || "toggled",
-      likesCount: likesCountResult.likesCount,
-      dislikesCount: likesCountResult.dislikesCount
-    };
+
+    return asToggleResponse(await response.json());
   } catch (error) {
     console.error('❌ [LIKES] Erreur:', error);
     throw error;
@@ -181,27 +186,10 @@ export const toggleProductDislike = async (productId: number): Promise<ToggleDis
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [LIKES] Erreur lors du toggle dislike:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de la gestion du dislike');
+      throw await parseApiError(response, 'Erreur lors de la gestion du dislike');
     }
-    
-    const data = await response.json();
-    console.log('✅ [LIKES] Toggle dislike effectué avec succès');
-    console.log('🎬 [LIKES] Action effectuée:', data.action);
-    
-    return {
-      message: data.message,
-      action: data.action,
-      likesCount: data.likesCount,
-      dislikesCount: data.dislikesCount
-    };
+
+    return asToggleResponse(await response.json());
   } catch (error) {
     console.error('❌ [LIKES] Erreur:', error);
     throw error;
@@ -218,36 +206,21 @@ export const getProductLikesCount = async (productId: number): Promise<LikesCoun
     console.log('🔄 [LIKES] Récupération du nombre de likes');
     console.log('📦 [LIKES] ID du produit:', productId);
     
-    // Appeler l'API pour récupérer les likes
-    const response = await fetch(`${backendUrl}/products/${productId}/likes`);
-    
-    console.log('📊 [LIKES] Statut de la réponse de récupération des likes:', response.status);
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('❌ [LIKES] Erreur lors de la récupération des compteurs:', 
-        errorData.message || response.statusText);
-      
-      // Si erreur, retourner 0 pour les deux compteurs
-      return {
-        likesCount: 0,
-        dislikesCount: 0
-      };
-    }
-    
-    const likes = unwrapList(await response.json(), ['likes']);
-    
-    // Compter les likes et dislikes
-    const likesCount = likes.filter((like: any) => like.type === 'LIKE').length;
-    const dislikesCount = likes.filter((like: any) => like.type === 'DISLIKE').length;
-    
-    console.log('✅ [LIKES] Compteurs récupérés avec succès');
-    console.log('👍 [LIKES] Nombre de likes:', likesCount);
-    console.log('👎 [LIKES] Nombre de dislikes:', dislikesCount);
-    
+    const [likesResponse, dislikesResponse] = await Promise.all([
+      fetch(`${backendUrl}/products/${productId}/likes?type=LIKE&page=1&limit=1`),
+      fetch(`${backendUrl}/products/${productId}/likes?type=DISLIKE&page=1&limit=1`),
+    ]);
+
+    const likesPage = likesResponse.ok
+      ? unwrapPaged(await likesResponse.json(), 'likes', { page: 1, limit: 1 })
+      : { items: [], pagination: { total: 0, page: 1, limit: 1, totalPages: 0 } };
+    const dislikesPage = dislikesResponse.ok
+      ? unwrapPaged(await dislikesResponse.json(), 'likes', { page: 1, limit: 1 })
+      : { items: [], pagination: { total: 0, page: 1, limit: 1, totalPages: 0 } };
+
     return {
-      likesCount,
-      dislikesCount
+      likesCount: likesPage.pagination.total,
+      dislikesCount: dislikesPage.pagination.total,
     };
   } catch (error) {
     console.error('❌ [LIKES] Erreur lors de la récupération des compteurs:', error);
@@ -304,26 +277,10 @@ export const getUserProductReaction = async (productId: number): Promise<UserRea
     }
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [LIKES] Erreur lors de la vérification de la réaction:', errorData.message);
-      
-      // Si l'erreur concerne un utilisateur non trouvé, gérer l'erreur d'authentification
-      if (errorData.message && errorData.message.includes('utilisateur') && errorData.message.includes('trouvé')) {
-        handleAuthError();
-      }
-      
-      throw new Error(errorData.message || 'Erreur lors de la vérification de la réaction');
+      throw await parseApiError(response, 'Erreur lors de la vérification de la réaction');
     }
-    
-    const data = await response.json();
-    console.log('✅ [LIKES] Réaction utilisateur récupérée avec succès');
-    console.log('👍 [LIKES] Utilisateur a liké:', data.hasLiked);
-    console.log('👎 [LIKES] Utilisateur a disliké:', data.hasDisliked);
-    
-    return {
-      hasLiked: data.hasLiked,
-      hasDisliked: data.hasDisliked
-    };
+
+    return asUserReaction(await response.json());
   } catch (error) {
     console.error('❌ [LIKES] Erreur lors de la vérification de la réaction:', error);
     

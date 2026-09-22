@@ -25,10 +25,10 @@ export function AuthSplitLayout({
           <div className="relative z-10 flex h-full w-full">{left}</div>
         </aside>
 
-        <main className="flex h-full w-full items-center justify-center overflow-y-auto bg-white px-6 py-10">
+        <main className="flex h-full w-full overflow-y-auto bg-white px-4 py-8 sm:px-6 sm:py-10">
           <div
             className={cn(
-              "w-full max-w-[420px] animate-login-slide-up",
+              "m-auto w-full max-w-[420px] animate-login-slide-up",
               contentClassName
             )}
           >

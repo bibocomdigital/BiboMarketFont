@@ -11,10 +11,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Package, Store, User, UserPlus } from "lucide-react";
+import { Store, User, UserPlus } from "lucide-react";
 import { RegisterFormValues } from "../RegisterForm";
 import PhoneInput from "./PhoneInput";
-import EmailInput from "../login/EmailInput";
 import PasswordInput from "../login/PasswordInput";
 import { UserRole, USER_ROLE_LABELS } from "@/types/user";
 import { cn } from "@/lib/utils";
@@ -30,7 +29,7 @@ const fieldClassName =
 const roleOptions = [
   { value: UserRole.CLIENT, icon: User },
   { value: UserRole.MERCHANT, icon: Store },
-  { value: UserRole.SUPPLIER, icon: Package },
+  // { value: UserRole.SUPPLIER, icon: Package },
 ];
 
 const RegisterStep1 = ({ form, isSubmitting }: RegisterStep1Props) => {
@@ -45,7 +44,7 @@ const RegisterStep1 = ({ form, isSubmitting }: RegisterStep1Props) => {
               Je m&apos;inscris en tant que *
             </FormLabel>
             <FormControl>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {roleOptions.map((option) => {
                   const selected = field.value === option.value;
                   const Icon = option.icon;
@@ -124,22 +123,6 @@ const RegisterStep1 = ({ form, isSubmitting }: RegisterStep1Props) => {
             </FormLabel>
             <FormControl>
               <PhoneInput form={form} field={field} className={fieldClassName} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
-      <FormField
-        control={form.control}
-        name="email"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-[13px] font-medium tracking-wide text-slate-600">
-              Email *
-            </FormLabel>
-            <FormControl>
-              <EmailInput {...field} className={fieldClassName} />
             </FormControl>
             <FormMessage />
           </FormItem>

@@ -6,6 +6,7 @@ import { useAdminFeedbacksQuery } from "@/hooks/queries/use-admin-query";
 import {
   AdminInput,
   GhostButton,
+  MobileCard,
   PaginationBar,
   Panel,
   StateMessage,
@@ -58,7 +59,8 @@ export function AdminFeedbacksView({ enabled }: { enabled: boolean }) {
         ) : feedbacks.length === 0 ? (
           <StateMessage>Aucun avis pour le moment.</StateMessage>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-white/5">
@@ -92,6 +94,42 @@ export function AdminFeedbacksView({ enabled }: { enabled: boolean }) {
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {feedbacks.map((item) => (
+              <MobileCard key={item.id}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-amber-300">{item.rating}/5</span>
+                  <span className="text-xs text-white/50">{formatDateFr(item.createdAt)}</span>
+                </div>
+                <p className="mt-2 text-sm text-white/80">{item.comment || "—"}</p>
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <dt className="text-white/40">Client</dt>
+                    <dd className="text-white/80">{fullName(item.client)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Commerçant</dt>
+                    <dd className="text-white/80">{fullName(item.merchant)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Boutique</dt>
+                    <dd className="text-white/80">{item.shop?.name || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Commande</dt>
+                    <dd className="text-white/80">
+                      {item.order ? `#${item.order.id} · ${formatFcfa(item.order.totalAmount)}` : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Contact</dt>
+                    <dd className="text-white/80">{item.contactSuccessful ? "Oui" : "Non"}</dd>
+                  </div>
+                </dl>
+              </MobileCard>
+            ))}
+          </div>
+          </>
         )}
         {pagination ? (
           <PaginationBar

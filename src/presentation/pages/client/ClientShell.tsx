@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import {
   Home,
+  LayoutDashboard,
   LayoutGrid,
   Package,
   ShoppingBag,
@@ -13,6 +14,7 @@ import {
   Menu,
   Search,
   Crown,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUnreadMessagesQuery } from "@/hooks/queries/use-messages-query";
@@ -30,12 +32,15 @@ export type ClientSection =
   | "about"
   | "contact";
 
-const NAV_ITEMS: Array<{
-  id: ClientSection;
+type ClientNavItem = {
+  id: ClientSection | "home";
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-}> = [
-  { id: "dashboard", label: "Accueil", icon: Home },
+};
+
+const NAV_ITEMS: ClientNavItem[] = [
+  { id: "home", label: "Accueil", icon: Home },
+  { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
   { id: "categories", label: "Catégories", icon: LayoutGrid },
   { id: "products", label: "Produits", icon: Package },
   { id: "orders", label: "Commandes", icon: ShoppingBag },
@@ -67,6 +72,8 @@ const SUBTITLES: Partial<Record<ClientSection, string>> = {
 type ClientShellProps = {
   section: ClientSection;
   onSectionChange: (section: ClientSection) => void;
+  onGoHome?: () => void;
+  onLogout?: () => void;
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
   displayName: string;
@@ -115,10 +122,14 @@ function NavButton({
 function SidebarBody({
   section,
   onSectionChange,
+  onGoHome,
+  onLogout,
   onPremiumClick,
 }: {
   section: ClientSection;
   onSectionChange: (section: ClientSection) => void;
+  onGoHome?: () => void;
+  onLogout?: () => void;
   onPremiumClick?: () => void;
 }) {
   const { data: unreadCount = 0 } = useUnreadMessagesQuery();
@@ -129,9 +140,9 @@ function SidebarBody({
           <NavButton
             key={item.id}
             item={item}
-            active={section === item.id}
+            active={item.id !== "home" && section === item.id}
             badge={item.id === "messages" ? unreadCount : 0}
-            onClick={() => onSectionChange(item.id)}
+            onClick={() => (item.id === "home" ? onGoHome?.() : onSectionChange(item.id))}
           />
         ))}
       </nav>
@@ -150,6 +161,16 @@ function SidebarBody({
             Découvrir
           </button>
         </div>
+        {onLogout ? (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="mt-3 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-bibocom-primary"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>Déconnexion</span>
+          </button>
+        ) : null}
         <p className="mt-3 flex items-center gap-2 px-1 text-xs text-slate-400">
           <span className="h-2 w-2 rounded-full bg-bibocom-success" />
           En ligne
@@ -162,6 +183,8 @@ function SidebarBody({
 export function ClientShell({
   section,
   onSectionChange,
+  onGoHome,
+  onLogout,
   mobileOpen,
   onMobileOpenChange,
   displayName,
@@ -259,6 +282,8 @@ export function ClientShell({
         <SidebarBody
           section={section}
           onSectionChange={onSectionChange}
+          onGoHome={onGoHome}
+          onLogout={onLogout}
           onPremiumClick={onPremiumClick}
         />
       </aside>
@@ -283,6 +308,11 @@ export function ClientShell({
                 onSectionChange(next);
                 onMobileOpenChange(false);
               }}
+              onGoHome={() => {
+                onGoHome?.();
+                onMobileOpenChange(false);
+              }}
+              onLogout={onLogout}
               onPremiumClick={() => {
                 onPremiumClick?.();
                 onMobileOpenChange(false);

@@ -41,6 +41,16 @@ export function StateMessage({ children }: { children: React.ReactNode }) {
   return <p className="px-5 py-10 text-sm text-slate-500">{children}</p>;
 }
 
+export function MobileCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={cn("rounded-2xl bg-slate-50 p-4", className)}>{children}</div>;
+}
+
 export function StatusPill({
   active,
   yes = "Oui",

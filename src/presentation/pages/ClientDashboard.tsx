@@ -65,6 +65,11 @@ const ClientDashboard = () => {
     }
   }, [ordersQuery.error, logout, navigate]);
 
+  const handleLogout = () => {
+    logout();
+    navigate("/", { replace: true });
+  };
+
   const handleSectionChange = (next: ClientSection) => {
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
@@ -98,6 +103,8 @@ const ClientDashboard = () => {
     <ClientShell
       section={section}
       onSectionChange={handleSectionChange}
+      onGoHome={() => navigate("/")}
+      onLogout={handleLogout}
       mobileOpen={mobileOpen}
       onMobileOpenChange={setMobileOpen}
       displayName={displayName}

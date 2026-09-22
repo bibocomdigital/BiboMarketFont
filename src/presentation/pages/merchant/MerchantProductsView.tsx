@@ -4,18 +4,24 @@ import React, { useMemo, useState } from "react";
 import { getUserErrorMessage } from "@domain/errors/app-error";
 import { useToast } from "@/hooks/use-toast";
 import { formatFcfa, productStatusLabel } from "@/lib/admin-analytics";
-import { formatImageUrl } from "@/services/productService";
+import { formatImageUrl, type Product } from "@/services/productService";
 import {
   useMerchantCatalogQuery,
   useUpdateProductStatusMutation,
 } from "@/hooks/queries/use-merchant-query";
+import { useDeleteProductMutation } from "@/hooks/mutations/use-catalog-mutations";
 import CreateProductModal from "@/components/shop/CreateProductModal";
+import EditProductModal from "@/components/shop/EditProductModal";
+import ProductDetailModal from "@/components/ProductDetailModal";
+import { useAuthSession } from "@/hooks/use-auth-session";
 import NoShop from "@/components/shop/NoShop";
+import { appAlert } from "@/presentation/lib/swal";
 import {
   AccentButton,
   GhostButton,
   MerchantInput,
   MerchantSelect,
+  MobileCard,
   PaginationBar,
   Panel,
   StateMessage,
@@ -36,15 +42,42 @@ export function MerchantProductsView({
   onShopCreated: () => void;
 }) {
   const { toast } = useToast();
+  const { isAuthenticated, user } = useAuthSession();
   const [page, setPage] = useState(1);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
   const query = useMerchantCatalogQuery(merchantId, page, 20, enabled && hasShop);
   const updateStatus = useUpdateProductStatusMutation();
+  const deleteProduct = useDeleteProductMutation();
   const products = query.data?.products ?? [];
   const pagination = query.data?.pagination;
+
+  const handleDelete = async (product: Product) => {
+    const confirmed = await appAlert.confirm({
+      title: "Supprimer ce produit ?",
+      text: `"${product.name}" sera définitivement supprimé, ainsi que ses images et sa vidéo.`,
+      confirmText: "Supprimer",
+      cancelText: "Annuler",
+    });
+    if (!confirmed) return;
+    try {
+      await deleteProduct.mutateAsync(product.id);
+      toast({
+        title: "Produit supprimé",
+        description: `${product.name} a été supprimé`,
+      });
+    } catch (error) {
+      toast({
+        title: "Suppression impossible",
+        description: getUserErrorMessage(error),
+        variant: "destructive",
+      });
+    }
+  };
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -109,7 +142,8 @@ export function MerchantProductsView({
         ) : filtered.length === 0 ? (
           <StateMessage>Aucun produit trouvé.</StateMessage>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-slate-100">
@@ -141,24 +175,38 @@ export function MerchantProductsView({
                       <Td>{product.stock}</Td>
                       <Td>{productStatusLabel(product.status)}</Td>
                       <Td>
-                        <GhostButton
-                          disabled={updateStatus.isPending}
-                          onClick={() =>
-                            updateStatus.mutate(
-                              { productId: product.id, status: nextStatus },
-                              {
-                                onError: (error) =>
-                                  toast({
-                                    title: "Statut non mis à jour",
-                                    description: getUserErrorMessage(error),
-                                    variant: "destructive",
-                                  }),
-                              }
-                            )
-                          }
-                        >
-                          {nextStatus === "PUBLISHED" ? "Publier" : "Mettre en brouillon"}
-                        </GhostButton>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <GhostButton
+                            disabled={updateStatus.isPending}
+                            onClick={() =>
+                              updateStatus.mutate(
+                                { productId: product.id, status: nextStatus },
+                                {
+                                  onError: (error) =>
+                                    toast({
+                                      title: "Statut non mis à jour",
+                                      description: getUserErrorMessage(error),
+                                      variant: "destructive",
+                                    }),
+                                }
+                              )
+                            }
+                          >
+                            {nextStatus === "PUBLISHED" ? "Publier" : "Mettre en brouillon"}
+                          </GhostButton>
+                          <GhostButton onClick={() => setPreviewProduct(product)}>
+                            Voir
+                          </GhostButton>
+                          <GhostButton onClick={() => setEditProduct(product)}>
+                            Modifier
+                          </GhostButton>
+                          <GhostButton
+                            disabled={deleteProduct.isPending}
+                            onClick={() => void handleDelete(product)}
+                          >
+                            Supprimer
+                          </GhostButton>
+                        </div>
                       </Td>
                     </tr>
                   );
@@ -166,6 +214,61 @@ export function MerchantProductsView({
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {filtered.map((product) => {
+              const image = formatImageUrl(product.images?.[0]?.imageUrl || null);
+              const nextStatus = product.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+              return (
+                <MobileCard key={product.id}>
+                  <div className="flex items-center gap-3">
+                    {image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={image} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-bibocom-light" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{product.name}</p>
+                      <p className="text-xs text-slate-500">{productStatusLabel(product.status)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <span className="font-medium">{formatFcfa(product.price)}</span>
+                    <span className="text-slate-500">Stock : {product.stock}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <GhostButton
+                      disabled={updateStatus.isPending}
+                      onClick={() =>
+                        updateStatus.mutate(
+                          { productId: product.id, status: nextStatus },
+                          {
+                            onError: (error) =>
+                              toast({
+                                title: "Statut non mis à jour",
+                                description: getUserErrorMessage(error),
+                                variant: "destructive",
+                              }),
+                          }
+                        )
+                      }
+                    >
+                      {nextStatus === "PUBLISHED" ? "Publier" : "Mettre en brouillon"}
+                    </GhostButton>
+                    <GhostButton onClick={() => setPreviewProduct(product)}>Voir</GhostButton>
+                    <GhostButton onClick={() => setEditProduct(product)}>Modifier</GhostButton>
+                    <GhostButton
+                      disabled={deleteProduct.isPending}
+                      onClick={() => void handleDelete(product)}
+                    >
+                      Supprimer
+                    </GhostButton>
+                  </div>
+                </MobileCard>
+              );
+            })}
+          </div>
+          </>
         )}
         {pagination ? (
           <PaginationBar
@@ -185,6 +288,26 @@ export function MerchantProductsView({
           void query.refetch();
         }}
       />
+
+      {editProduct && (
+        <EditProductModal
+          key={editProduct.id}
+          product={editProduct}
+          onClose={() => setEditProduct(null)}
+          onProductUpdated={() => {
+            void query.refetch();
+          }}
+        />
+      )}
+
+      {previewProduct && (
+        <ProductDetailModal
+          product={previewProduct}
+          isLoggedIn={isAuthenticated}
+          currentUserId={user?.id}
+          onClose={() => setPreviewProduct(null)}
+        />
+      )}
     </div>
   );
 }

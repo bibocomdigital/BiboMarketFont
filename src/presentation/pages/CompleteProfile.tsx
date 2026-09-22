@@ -1,7 +1,7 @@
 "use client";
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,12 +10,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { UserRole, USER_ROLE_LABELS } from '@/types/user';
+import { cn } from '@/lib/utils';
 import { dashboardPathFor } from '@/hooks/use-auth-session';
+import { notifyAuthChanged } from '@/services/authService';
+import { unwrapRecord } from '@infrastructure/api/api-envelope';
 import CountrySelect from '@/components/forms/register/CountrySelect';
 import { Country } from '@/data/countries';
-import { MapPin, UserCheck, ShoppingBag, ShoppingCart, User, Edit, Check } from 'lucide-react';
+import { MapPin, UserCheck, ShoppingBag, User, Edit, Check } from 'lucide-react';
 import PhoneInput from '@/components/forms/register/PhoneInput';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -24,11 +26,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 const CompleteProfileSchema = z.object({
   firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
   lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-  phoneNumber: z.string().min(10, "Le numéro de téléphone doit contenir au moins 10 chiffres"),
-  country: z.string().min(2, "Veuillez sélectionner un pays"),
-  city: z.string().min(2, "Veuillez entrer une ville"),
-  department: z.string().min(2, "Veuillez entrer un département"),
-  commune: z.string().min(2, "Veuillez entrer une commune"),
+  phoneNumber: z
+    .string()
+    .refine(
+      (value) => value.replace(/\D/g, '').length >= 8,
+      "Le numéro de téléphone est obligatoire",
+    ),
+  country: z.string().optional().default(''),
+  city: z.string().optional().default(''),
+  department: z.string().optional().default(''),
+  commune: z.string().optional().default(''),
   role: z.nativeEnum(UserRole, {
     required_error: "Veuillez sélectionner un rôle",
   }),
@@ -43,6 +50,7 @@ const CompleteProfile = () => {
   const [token, setToken] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const didPrefill = useRef(false);
 
   const form = useForm<CompleteProfileFormValues>({
     resolver: zodResolver(CompleteProfileSchema),
@@ -59,29 +67,29 @@ const CompleteProfile = () => {
   });
 
   useEffect(() => {
-    // Get token from URL
     const params = new URLSearchParams(location.search);
     const urlToken = params.get('token');
-    
-    if (urlToken) {
-      console.log('🔑 [COMPLETE_PROFILE] Token retrieved from URL:', urlToken.substring(0, 15) + '...');
-      setToken(urlToken);
-      
-      // Store token in localStorage
-      localStorage.setItem('auth_token', urlToken);
-      
-      // Verify token and prefill available user data
-      fetchUserData(urlToken);
-    } else {
-      console.warn('⚠️ [COMPLETE_PROFILE] No token found in URL');
+
+    if (!urlToken) {
       toast({
         title: "Erreur d'authentification",
         description: "Veuillez vous connecter à nouveau",
         variant: "destructive"
       });
       navigate('/login');
+      return;
     }
-  }, [location, navigate, toast]);
+
+    setToken(urlToken);
+    localStorage.setItem('token', urlToken);
+    localStorage.setItem('auth_token', urlToken);
+
+    if (didPrefill.current) {
+      return;
+    }
+    didPrefill.current = true;
+    void fetchUserData(urlToken);
+  }, [location.search, navigate, toast]);
 
   const fetchUserData = async (authToken: string) => {
     try {
@@ -104,22 +112,28 @@ const CompleteProfile = () => {
         throw new Error('Failed to retrieve user data');
       }
       
-      const data = await response.json();
-      console.log('👤 [COMPLETE_PROFILE] User data retrieved:', data);
-      
-      // Prefill form with existing data
-      if (data.user) {
-        const user = data.user;
-        
-        form.setValue('firstName', user.firstName || '');
-        form.setValue('lastName', user.lastName || '');
-        form.setValue('phoneNumber', user.phoneNumber || '');
-        form.setValue('country', user.country || '');
-        form.setValue('city', user.city || '');
-        form.setValue('department', user.department || '');
-        form.setValue('commune', user.commune || '');
-        form.setValue('role', user.role || UserRole.CLIENT);
-      }
+      const payload = unwrapRecord(await response.json());
+      const user = (payload.user && typeof payload.user === 'object'
+        ? payload.user
+        : payload) as Record<string, unknown>;
+
+      const phone = typeof user.phoneNumber === 'string' ? user.phoneNumber : '';
+      form.setValue('firstName', String(user.firstName ?? ''));
+      form.setValue('lastName', String(user.lastName ?? ''));
+      form.setValue(
+        'phoneNumber',
+        phone.startsWith('temp-') ? '' : phone,
+      );
+      form.setValue('country', String(user.country ?? ''));
+      form.setValue('city', String(user.city ?? ''));
+      form.setValue('department', String(user.department ?? ''));
+      form.setValue('commune', String(user.commune ?? ''));
+      form.setValue(
+        'role',
+        Object.values(UserRole).includes(user.role as UserRole)
+          ? (user.role as UserRole)
+          : UserRole.CLIENT,
+      );
     } catch (error) {
       console.error('🔴 [COMPLETE_PROFILE] Error retrieving data:', error);
       toast({
@@ -175,6 +189,20 @@ const CompleteProfile = () => {
       const data = await response.json();
       console.log('✅ [COMPLETE_PROFILE] Profile updated successfully:', data);
       
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser) as Record<string, unknown>;
+          localStorage.setItem(
+            'user',
+            JSON.stringify({ ...parsed, role: values.role }),
+          );
+        } catch {
+          localStorage.setItem('user', JSON.stringify({ role: values.role }));
+        }
+      }
+      notifyAuthChanged();
+
       toast({
         title: "Profil complété",
         description: "Votre profil a été mis à jour avec succès",
@@ -345,49 +373,61 @@ const CompleteProfile = () => {
                     </div>
                     
                     <div className="space-y-6">
-                      <PhoneInput form={form} selectedCountry={selectedCountry || undefined} />
+                      <FormField
+                        control={form.control}
+                        name="phoneNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Téléphone *</FormLabel>
+                            <FormControl>
+                              <PhoneInput
+                                form={form}
+                                field={field}
+                                selectedCountry={selectedCountry || undefined}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       
                       <FormField
                         control={form.control}
                         name="role"
                         render={({ field }) => (
                           <FormItem className="space-y-3">
-                            <FormLabel>Je m'inscris en tant que*</FormLabel>
+                            <FormLabel>Je m&apos;inscris en tant que *</FormLabel>
                             <FormControl>
-                              <RadioGroup
-                                onValueChange={(value) => {
-                                  console.log('🔄 [COMPLETE_PROFILE] Role changed to:', value);
-                                  field.onChange(value);
-                                }}
-                                value={field.value}
-                                className="grid grid-cols-1 md:grid-cols-3 gap-4"
-                              >
-                                {Object.values(UserRole)
-                                  .filter((role) => role !== UserRole.ADMIN)
-                                  .map((role) => (
-                                  <FormItem key={role} className="flex items-start space-x-2 space-y-0 p-4 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
-                                    <FormControl>
-                                      <RadioGroupItem value={role} className="mt-1" />
-                                    </FormControl>
-                                    <div className="space-y-1">
-                                      <FormLabel className="font-semibold cursor-pointer">
-                                        {USER_ROLE_LABELS[role as UserRole]}
-                                      </FormLabel>
-                                      <p className="text-xs text-gray-500">
-                                        {role === UserRole.CLIENT ? 
-                                          "Découvrez et achetez des produits" : 
-                                          role === UserRole.MERCHANT ? 
-                                          "Vendez vos produits sur notre plateforme" : 
-                                          "Fournissez des produits aux marchands"}
-                                      </p>
-                                    </div>
-                                  </FormItem>
-                                ))}
-                              </RadioGroup>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {([UserRole.CLIENT, UserRole.MERCHANT, UserRole.SUPPLIER] as const).map((role) => {
+                                  const selected = field.value === role;
+                                  return (
+                                    <button
+                                      key={role}
+                                      type="button"
+                                      onClick={() => field.onChange(role)}
+                                      className={cn(
+                                        "flex flex-col items-start rounded-lg border p-4 text-left transition-colors",
+                                        selected
+                                          ? "border-indigo-500 bg-indigo-50"
+                                          : "border-gray-200 hover:bg-gray-50",
+                                      )}
+                                    >
+                                      <span className="font-semibold">
+                                        {USER_ROLE_LABELS[role]}
+                                      </span>
+                                      <span className="mt-1 text-xs text-gray-500">
+                                        {role === UserRole.CLIENT
+                                          ? "Découvrez et achetez des produits"
+                                          : role === UserRole.MERCHANT
+                                            ? "Vendez vos produits sur notre plateforme"
+                                            : "Fournissez des produits aux marchands"}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </FormControl>
-                            <div className="text-xs text-muted-foreground">
-                              * Veuillez sélectionner un rôle pour continuer
-                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -397,7 +437,7 @@ const CompleteProfile = () => {
                     <div className="space-y-6">
                       <div className="flex items-center mb-2">
                         <MapPin className="h-5 w-5 text-indigo-500 mr-2" />
-                        <h3 className="font-medium">Localisation</h3>
+                        <h3 className="font-medium">Localisation <span className="text-sm font-normal text-gray-400">(optionnel)</span></h3>
                       </div>
                       
                       <CountrySelect form={form} onCountryChange={onCountryChange} />
@@ -408,7 +448,7 @@ const CompleteProfile = () => {
                           name="city"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Ville</FormLabel>
+                              <FormLabel>Ville <span className="font-normal text-gray-400">(optionnel)</span></FormLabel>
                               <FormControl>
                                 <div className="relative">
                                   <Input 
@@ -428,7 +468,7 @@ const CompleteProfile = () => {
                           name="department"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Département</FormLabel>
+                              <FormLabel>Département <span className="font-normal text-gray-400">(optionnel)</span></FormLabel>
                               <FormControl>
                                 <div className="relative">
                                   <Input 
@@ -450,7 +490,7 @@ const CompleteProfile = () => {
                         name="commune"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Commune</FormLabel>
+                            <FormLabel>Commune <span className="font-normal text-gray-400">(optionnel)</span></FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <Input 

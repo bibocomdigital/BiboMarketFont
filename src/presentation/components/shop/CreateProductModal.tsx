@@ -18,6 +18,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 import { useCreateProductMutation } from '@/hooks/mutations/use-catalog-mutations';
+import { useProductCategoriesQuery } from '@/hooks/queries/use-products-query';
+
+const MAX_IMAGES = 5;
 
 interface CreateProductModalProps {
   isOpen: boolean;
@@ -31,6 +34,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
   const [images, setImages] = useState<Array<{file: File, preview: string}>>([]);
   const [isPublished, setIsPublished] = useState(false);
   const createProductMutation = useCreateProductMutation();
+  const { data: categories = [] } = useProductCategoriesQuery(isOpen);
   const loading = createProductMutation.isPending;
   const [error, setError] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -85,13 +89,26 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
     });
   };
 
+  const addImages = (files: File[]) => {
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      setError(`Maximum ${MAX_IMAGES} images par produit`);
+      return;
+    }
+    const newImages = files.slice(0, remaining).map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+    setImages([...images, ...newImages]);
+    if (files.length > remaining) {
+      setError(`Maximum ${MAX_IMAGES} images par produit`);
+    }
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newImages = Array.from(e.target.files).map(file => ({
-        file,
-        preview: URL.createObjectURL(file)
-      }));
-      setImages([...images, ...newImages]);
+      addImages(Array.from(e.target.files));
+      e.target.value = '';
     }
   };
 
@@ -130,13 +147,10 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
     
     if (e.dataTransfer.files) {
       if (type === 'image') {
-        const newImages = Array.from(e.dataTransfer.files)
-          .filter(file => file.type.startsWith('image/'))
-          .map(file => ({
-            file,
-            preview: URL.createObjectURL(file)
-          }));
-        setImages([...images, ...newImages]);
+        const files = Array.from(e.dataTransfer.files).filter(file =>
+          file.type.startsWith('image/')
+        );
+        addImages(files);
       } else if (type === 'video' && e.dataTransfer.files[0]?.type.startsWith('video/')) {
         const file = e.dataTransfer.files[0];
         const preview = URL.createObjectURL(file);
@@ -197,7 +211,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
       productData.append('description', formData.description);
       productData.append('price', formData.price);
       productData.append('stock', formData.stock);
-      productData.append('category', formData.category);
+      productData.append('categorieProdId', formData.category);
       productData.append('status', isPublished ? 'PUBLISHED' : 'DRAFT');
       
       // Add image files
@@ -208,7 +222,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
       
       // Add video file if exists
       if (videoFile) {
-        productData.append('videoFile', videoFile);
+        productData.append('video', videoFile);
       } else if (formData.videoUrl) {
         productData.append('videoUrl', formData.videoUrl);
       }
@@ -231,7 +245,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
         toast({
           title: "Produit créé avec succès",
           description: `${formData.name} a été ajouté à votre catalogue`,
-          variant: "success"
+          variant: "default"
         });
       } else {
         alert(`Produit "${formData.name}" créé avec succès`);
@@ -269,19 +283,19 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-40"
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/70"
         onClick={handleClose}
-      ></div>
-      
-      {/* Modal */}
-      <div 
-        className="fixed inset-0 flex items-center justify-center z-50 p-4"
-        ref={modalRef}
-      >
-        <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.25)] animate-in fade-in-50 zoom-in-95 duration-300">
+        aria-hidden="true"
+      />
+      <div className="relative flex h-full items-center justify-center p-4 pointer-events-none">
+        <div
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          className="pointer-events-auto bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.35)] animate-in fade-in-50 zoom-in-95 duration-300"
+        >
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b">
             <div className="flex items-center">
@@ -342,11 +356,11 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
                       <SelectValue placeholder="Sélectionnez une catégorie" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="electronics">Électronique</SelectItem>
-                      <SelectItem value="clothing">Vêtements</SelectItem>
-                      <SelectItem value="home">Maison & Jardin</SelectItem>
-                      <SelectItem value="beauty">Beauté & Santé</SelectItem>
-                      <SelectItem value="food">Alimentation</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={String(category.id)}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -498,7 +512,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
                     <Video className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-600 mb-1">Glissez-déposez une vidéo ou</p>
                     <Button variant="outline" size="sm" type="button">Parcourir la galerie</Button>
-                    <p className="text-xs text-gray-500 mt-2">MP4, MOV, etc. (max. 20MB)</p>
+                    <p className="text-xs text-gray-500 mt-2">MP4, MOV, etc. (max. 50MB)</p>
                   </div>
                 </div>
               </div>
@@ -527,7 +541,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

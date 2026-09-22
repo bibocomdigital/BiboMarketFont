@@ -1,5 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createProduct } from "@/services/productService";
+import {
+  createProduct,
+  deleteProduct,
+  updateProductWithImages,
+} from "@/services/productService";
 import { createShop, updateShop } from "@/services/shopService";
 import { toggleFollow } from "@/services/subscriptionService";
 import { addComment, replyToComment } from "@/services/commentService";
@@ -11,6 +15,33 @@ export function useCreateProductMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (formData: FormData) => createProduct(formData),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: productKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: shopKeys.mine() });
+      queryClient.invalidateQueries({ queryKey: merchantKeys.all });
+    },
+  });
+}
+
+export function useUpdateProductMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ productId, formData }: { productId: number; formData: FormData }) =>
+      updateProductWithImages(productId, formData),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: productKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: shopKeys.mine() });
+      queryClient.invalidateQueries({ queryKey: merchantKeys.all });
+    },
+  });
+}
+
+export function useDeleteProductMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: number) => deleteProduct(productId),
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: productKeys.lists() });

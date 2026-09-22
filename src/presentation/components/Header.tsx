@@ -70,6 +70,14 @@ const Header = () => {
             </div>
 
             <nav className="hidden lg:flex items-center gap-5 xl:gap-8">
+              {isAuthenticated && (
+                <Link
+                  to={dashboardPath}
+                  className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300"
+                >
+                  Tableau de bord
+                </Link>
+              )}
               <Link
                 to="/"
                 className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300"
@@ -233,6 +241,15 @@ const Header = () => {
             </button>
           </div>
           <nav className="flex flex-col space-y-6">
+            {isAuthenticated && (
+              <Link
+                to={dashboardPath}
+                className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+                onClick={closeMobile}
+              >
+                Tableau de bord
+              </Link>
+            )}
             <Link
               to="/"
               className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"

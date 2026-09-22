@@ -6,27 +6,19 @@ import { formatImageUrl } from '@/services/productService';
 import { useProductCategoriesQuery, useProductsQuery } from '@/hooks/queries/use-products-query';
 import { useAddToCartMutation } from '@/hooks/mutations/use-cart-mutations';
 import { 
-  getProductLikesCount, 
   getUserProductReaction, 
   toggleProductLike, 
   toggleProductDislike,
-  debugLikesInfo
 } from '@/services/likeService';
-import { 
-  getProductComments, 
-  addComment, 
-  replyToComment, 
-  deleteComment, 
-  deleteReply,
-  updateComment
-} from '@/services/commentService';
-import { Loader, Heart, MessageCircle, X, ChevronLeft, ChevronRight, ThumbsDown, Search, Filter } from 'lucide-react';
+import { getUserErrorMessage } from '@domain/errors/app-error';
+import { Loader, Heart, MessageCircle, X, ChevronLeft, ChevronRight, ThumbsDown, Search, Play } from 'lucide-react';
 import { ServiceUnavailableState } from '@/components/feedback/ServiceUnavailableState';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useSearchParams } from 'react-router-dom';
+import ProductDetailModal from '@/components/ProductDetailModal';
 
 const ProductsGrid = () => {
-  const { isAuthenticated: isLoggedIn } = useAuthSession();
+  const { isAuthenticated: isLoggedIn, user } = useAuthSession();
   const [searchParams] = useSearchParams();
   const categoryFromUrl = searchParams.get('category');
   const qFromUrl = searchParams.get('q') || '';
@@ -66,19 +58,8 @@ const ProductsGrid = () => {
   const [likesCount, setLikesCount] = useState<{[key: number]: number}>({});
   const [dislikesCount, setDislikesCount] = useState<{[key: number]: number}>({});
   
-  // États pour gérer les likes/dislikes
-  const [comments, setComments] = useState<any[]>([]);
-  const [commentsPagination, setCommentsPagination] = useState({
-    total: 0,
-    page: 1,
-    limit: 10,
-    totalPages: 0
-  });
-  const [newCommentText, setNewCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<number | null>(null);
-  const [replyText, setReplyText] = useState('');
-  const [loadingComments, setLoadingComments] = useState(false);
   const [cartMessages, setCartMessages] = useState<{[key: number]: boolean}>({});
+  const [commentsCountByProduct, setCommentsCountByProduct] = useState<{[key: number]: number}>({});
 
   useEffect(() => {
     if (qFromUrl) setSearchTerm(qFromUrl);
@@ -133,6 +114,7 @@ const ProductsGrid = () => {
 
   const rawProducts = productsQuery.data?.products ?? [];
   const filteredProducts = rawProducts.filter((product) => {
+    if (product.status === 'DRAFT') return false;
     const categoryMatch = !selectedCategory || (product.category && (product.category as { id?: number }).id === selectedCategory);
     if (!categoryMatch) return false;
     if (!searchTerm.trim()) return true;
@@ -176,44 +158,30 @@ const ProductsGrid = () => {
       const likesData: {[key: number]: boolean} = {};
       const dislikesData: {[key: number]: boolean} = {};
       const likesCountData: {[key: number]: number} = {};
-      const dislikesCountData: {[key: number]: number} = {};
-      
-      // Pour chaque produit
+      const commentsCountData: {[key: number]: number} = {};
+
       await Promise.all(products.map(async (product) => {
-        // 1. TOUJOURS récupérer le nombre total de likes (information publique)
-        try {
-          const likesCountResult = await getProductLikesCount(product.id);
-          likesCountData[product.id] = likesCountResult.likesCount;
-          dislikesCountData[product.id] = likesCountResult.dislikesCount;
-        } catch (countError) {
-          console.error(`Erreur lors de la récupération du nombre de likes pour le produit ${product.id}:`, countError);
-          likesCountData[product.id] = 0;
-          dislikesCountData[product.id] = 0;
-        }
-        
-        // 2. Vérifier si l'utilisateur a liké/disliké SEULEMENT s'il est connecté
+        likesCountData[product.id] = product.likesCount ?? product._count?.likes ?? 0;
+        commentsCountData[product.id] = product.commentsCount ?? product._count?.comments ?? 0;
+        likesData[product.id] = Boolean(product.isLiked);
+        dislikesData[product.id] = false;
+
         if (isLoggedIn) {
           try {
             const userReaction = await getUserProductReaction(product.id);
             likesData[product.id] = userReaction.hasLiked;
             dislikesData[product.id] = userReaction.hasDisliked;
-          } catch (reactionError) {
-            console.error(`Erreur lors de la vérification de la réaction pour le produit ${product.id}:`, reactionError);
-            likesData[product.id] = false;
+          } catch {
+            likesData[product.id] = Boolean(product.isLiked);
             dislikesData[product.id] = false;
           }
-        } else {
-          // Si l'utilisateur n'est pas connecté, définir les réactions par défaut
-          likesData[product.id] = false;
-          dislikesData[product.id] = false;
         }
       }));
-      
-      // Mettre à jour les états avec les données récupérées
-      setLikes(likesData);
-      setDislikes(dislikesData);
-      setLikesCount(likesCountData);
-      setDislikesCount(dislikesCountData);
+
+      setLikes((prev) => ({ ...prev, ...likesData }));
+      setDislikes((prev) => ({ ...prev, ...dislikesData }));
+      setLikesCount((prev) => ({ ...prev, ...likesCountData }));
+      setCommentsCountByProduct((prev) => ({ ...prev, ...commentsCountData }));
     } catch (error) {
       console.error("Erreur lors du chargement des données de likes:", error);
     }
@@ -460,19 +428,15 @@ const ProductsGrid = () => {
         [productId]: result.dislikesCount
       }));
       
-      // Mettre à jour le statut des réactions selon l'action effectuée
-      if (result.action === 'added_like') {
+      if (result.action === 'liked') {
         setLikes(prev => ({ ...prev, [productId]: true }));
         setDislikes(prev => ({ ...prev, [productId]: false }));
-      } else if (result.action === 'removed_like') {
+      } else if (result.action === 'unliked') {
         setLikes(prev => ({ ...prev, [productId]: false }));
       }
-      
-      // Pour déboguer
-      // debugLikesInfo(productId);
     } catch (error: any) {
       console.error("Error toggling like:", error);
-      alert(error.message || "Une erreur s'est produite");
+      alert(getUserErrorMessage(error) || "Une erreur s'est produite");
       
       // Recharger les données en cas d'erreur pour être sûr d'avoir le bon état
       if (selectedProduct && selectedProduct.id === productId) {
@@ -545,19 +509,15 @@ const ProductsGrid = () => {
         [productId]: result.dislikesCount
       }));
       
-      // Mettre à jour le statut des réactions selon l'action effectuée
-      if (result.action === 'added_dislike') {
+      if (result.action === 'disliked') {
         setDislikes(prev => ({ ...prev, [productId]: true }));
         setLikes(prev => ({ ...prev, [productId]: false }));
-      } else if (result.action === 'removed_dislike') {
+      } else if (result.action === 'undisliked') {
         setDislikes(prev => ({ ...prev, [productId]: false }));
       }
-      
-      // Pour déboguer
-      // debugLikesInfo(productId);
     } catch (error: any) {
       console.error("Error toggling dislike:", error);
-      alert(error.message || "Une erreur s'est produite");
+      alert(getUserErrorMessage(error) || "Une erreur s'est produite");
       
       // Recharger les données en cas d'erreur pour être sûr d'avoir le bon état
       if (selectedProduct && selectedProduct.id === productId) {
@@ -571,180 +531,17 @@ const ProductsGrid = () => {
     }
   };
   
-  // Charger les commentaires d'un produit
-  const loadProductComments = async (productId: number, page: number = 1) => {
-    try {
-      setLoadingComments(true);
-      const result = await getProductComments(productId, page);
-      setComments(result.comments);
-      setCommentsPagination(result.pagination);
-    } catch (error) {
-      console.error('Erreur lors du chargement des commentaires:', error);
-    } finally {
-      setLoadingComments(false);
-    }
-  };
-
-  // Ajouter un commentaire
-  const handleAddComment = async (productId: number, event?: React.MouseEvent) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    
-    if (!isLoggedIn) {
-      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-      return;
-    }
-    
-    if (!newCommentText.trim()) {
-      return;
-    }
-    
-    try {
-      const result = await addComment(productId, { comment: newCommentText });
-      // Ajouter le nouveau commentaire au début de la liste
-      setComments(prevComments => [result.comment, ...prevComments]);
-      // Réinitialiser le champ de texte
-      setNewCommentText('');
-      // Mettre à jour le compteur de commentaires
-      setCommentsPagination(prev => ({
-        ...prev,
-        total: prev.total + 1
-      }));
-    } catch (error) {
-      console.error('Erreur lors de l\'ajout du commentaire:', error);
-      alert('Une erreur est survenue lors de l\'ajout du commentaire');
-    }
-  };
-
-  // Ajouter une réponse à un commentaire
-  const handleReplyToComment = async (commentId: number, event?: React.MouseEvent) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    
-    if (!isLoggedIn) {
-      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-      return;
-    }
-    
-    if (!replyText.trim()) {
-      return;
-    }
-    
-    try {
-      const result = await replyToComment(commentId, { reply: replyText });
-      // Mettre à jour le commentaire avec la nouvelle réponse
-      setComments(prevComments => 
-        prevComments.map(comment => 
-          comment.id === commentId
-            ? {
-                ...comment,
-                replies: [...(comment.replies || []), result.reply]
-              }
-            : comment
-        )
-      );
-      // Réinitialiser le champ de texte et l'état de réponse
-      setReplyText('');
-      setReplyingTo(null);
-    } catch (error) {
-      console.error('Erreur lors de l\'ajout de la réponse:', error);
-      alert('Une erreur est survenue lors de l\'ajout de la réponse');
-    }
-  };
-
-  // Supprimer un commentaire
-  const handleDeleteComment = async (commentId: number, event?: React.MouseEvent) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    
-    if (!isLoggedIn) {
-      return;
-    }
-    
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce commentaire ?')) {
-      return;
-    }
-    
-    try {
-      await deleteComment(commentId);
-      // Supprimer le commentaire de la liste
-      setComments(prevComments => prevComments.filter(comment => comment.id !== commentId));
-      // Mettre à jour le compteur de commentaires
-      setCommentsPagination(prev => ({
-        ...prev,
-        total: Math.max(0, prev.total - 1)
-      }));
-    } catch (error) {
-      console.error('Erreur lors de la suppression du commentaire:', error);
-      alert('Une erreur est survenue lors de la suppression du commentaire');
-    }
-  };
-
-  // Supprimer une réponse
-  const handleDeleteReply = async (commentId: number, replyId: number, event?: React.MouseEvent) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    
-    if (!isLoggedIn) {
-      return;
-    }
-    
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette réponse ?')) {
-      return;
-    }
-    
-    try {
-      await deleteReply(replyId);
-      // Mettre à jour le commentaire en supprimant la réponse
-      setComments(prevComments => 
-        prevComments.map(comment => 
-          comment.id === commentId
-            ? {
-                ...comment,
-                replies: (comment.replies || []).filter(reply => reply.id !== replyId)
-              }
-            : comment
-        )
-      );
-    } catch (error) {
-      console.error('Erreur lors de la suppression de la réponse:', error);
-      alert('Une erreur est survenue lors de la suppression de la réponse');
-    }
-  };
-  
-  // Open modal with product details
-  const openModal = async (product: any) => {
+  const openModal = (product: any) => {
     setSelectedProduct(product);
     setIsModalOpen(true);
-    // Arrêter tous les carrousels quand la modal est ouverte
     Object.keys(carouselIntervals.current).forEach(id => {
       stopCarousel(Number(id));
     });
-    
-    // Charger les commentaires
-    await loadProductComments(product.id);
   };
-  
-  // Close modal
+
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedProduct(null);
-    setComments([]);
-    setCommentsPagination({
-      total: 0,
-      page: 1,
-      limit: 10,
-      totalPages: 0
-    });
-    setReplyingTo(null);
-    setReplyText('');
-    setNewCommentText('');
-    
-    // Redémarrer les carrousels quand la modal est fermée
     products.forEach(product => {
       if (product.images && product.images.length > 1) {
         startCarousel(product.id);
@@ -752,15 +549,12 @@ const ProductsGrid = () => {
     });
   };
 
-  // Obtenir le nombre de commentaires
   const getCommentsCount = (productId: number) => {
-    // Si le produit est sélectionné, on utilise le compteur réel des commentaires
-    if (selectedProduct && selectedProduct.id === productId) {
-      return commentsPagination.total;
+    if (commentsCountByProduct[productId] != null) {
+      return commentsCountByProduct[productId];
     }
-    // Sinon, on utilise le compteur de commentaires du produit s'il existe
     const product = products.find(p => p.id === productId);
-    return product?.commentsCount || 0;
+    return product?.commentsCount || product?._count?.comments || 0;
   };
 
   if (isCatalogUnavailable) {
@@ -953,6 +747,12 @@ const ProductsGrid = () => {
                       <span className="text-gray-400">Image non disponible</span>
                     </div>
                   )}
+                  {product.videoUrl && (
+                    <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white">
+                      <Play size={12} />
+                      Vidéo
+                    </span>
+                  )}
                   <button
                     className="absolute bottom-2 right-2 bg-orange-500 hover:bg-orange-600 text-white p-2 rounded-full shadow-md transition-colors z-10"
                     onClick={(e) => handleAddToCart(product, e)}
@@ -1080,416 +880,22 @@ const ProductsGrid = () => {
         </>
       )}
       
-      {/* Modal pour afficher les détails du produit - Reste identique */}
       {isModalOpen && selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="font-bold text-lg">{selectedProduct.name}</h3>
-              <button onClick={closeModal} className="text-gray-500 hover:text-gray-700">
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-              {/* Galerie d'images */}
-              <div className="space-y-4">
-                <div className="relative h-64 md:h-96 bg-gray-100 rounded-lg overflow-hidden">
-                  {selectedProduct.images && selectedProduct.images.length > 0 ? (
-                    <img
-                      src={getImageUrl(selectedProduct, currentImages[selectedProduct.id] || 0)}
-                      alt={selectedProduct.name}
-                      className="w-full h-full object-cover cursor-zoom-in"
-                      onClick={() => {
-                        // Ouvrir l'image en plein écran ou dans une modal plus grande
-                        if (document.fullscreenElement) {
-                          document.exitFullscreen();
-                        } else {
-                          const elem = document.documentElement;
-                          if (elem.requestFullscreen) {
-                            elem.requestFullscreen();
-                          }
-                        }
-                      }}
-                      onError={handleImageError}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <span className="text-gray-400">Image non disponible</span>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Miniatures des images */}
-                {selectedProduct.images && selectedProduct.images.length > 1 && (
-                  <div className="flex overflow-x-auto space-x-2 pb-2">
-                    {selectedProduct.images.map((image: any, idx: number) => (
-                      <div 
-                        key={`thumbnail-${selectedProduct.id}-${idx}`}
-                        className={`w-16 h-16 flex-shrink-0 rounded-md overflow-hidden cursor-pointer border-2 ${
-                          idx === (currentImages[selectedProduct.id] || 0) 
-                            ? 'border-blue-500' 
-                            : 'border-transparent'
-                        }`}
-                        onClick={() => setCurrentImages(prev => ({...prev, [selectedProduct.id]: idx}))}
-                      >
-                        <img
-                          src={getImageUrl(selectedProduct, idx)}
-                          alt={`${selectedProduct.name} - Image ${idx + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              {/* Détails du produit */}
-              <div className="space-y-4">
-                {/* Info commerçant/boutique */}
-                {(selectedProduct.user || selectedProduct.shop || selectedProduct.shopId || selectedProduct.userId) && (
-                  <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
-                    {selectedProduct.shop?.logo ? (
-  <img 
-    src={formatImageUrl(selectedProduct.shop.logo)}
-    alt={selectedProduct.shop.name}
-    className="w-full h-full object-cover"
-    onError={(e) => {
-      e.currentTarget.src = 'data:image/svg+xml;charset=UTF-8,...';
-    }}
-  />
-) : selectedProduct.user?.photo ? (
-  <img 
-    src={formatImageUrl(selectedProduct.user.photo)}
-    alt={`${selectedProduct.user.firstName} ${selectedProduct.user.lastName}`}
-    className="w-full h-full object-cover"
-    onError={(e) => {
-      e.currentTarget.src = 'data:image/svg+xml;charset=UTF-8,...';
-    }}
-  />
-) : (
-  <div className="w-full h-full bg-purple-500 flex items-center justify-center text-white font-bold text-lg">
-    {selectedProduct.shop?.name?.charAt(0) || selectedProduct.user?.firstName?.charAt(0) || 'B'}
-  </div>
-)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-semibold text-gray-900">
-                        {selectedProduct.shop?.name || (selectedProduct.user && `${selectedProduct.user.firstName} ${selectedProduct.user.lastName}`) || 'Boutique'}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {(selectedProduct.shop?.phoneNumber || selectedProduct.user?.phone) && (
-                          <div className="flex items-center mt-1">
-                            <span className="mr-1">📞</span> {selectedProduct.shop?.phoneNumber || selectedProduct.user?.phone}
-                          </div>
-                        )}
-                        {(selectedProduct.shop?.address || selectedProduct.user?.address) && (
-                          <div className="flex items-center mt-1">
-                            <span className="mr-1">📍</span> {selectedProduct.shop?.address || selectedProduct.user?.address}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <button 
-                      className="bg-green-500 text-white px-3 py-1 rounded-full text-xs hover:bg-green-600 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const shopId = selectedProduct.shopId || selectedProduct.shop?.id || selectedProduct.userId || selectedProduct.user?.id;
-                        if (shopId) {
-                          window.location.href = `/boutique/${shopId}`;
-                        }
-                      }}
-                    >
-                      Voir la boutique
-                    </button>
-                  </div>
-                )}
-                
-                <div className="flex justify-between items-center">
-                  <div className="text-2xl font-bold text-gray-900">{selectedProduct.price}</div>
-                  <button 
-                    className="flex items-center space-x-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors"
-                    onClick={(e) => handleAddToCart(selectedProduct, e)}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    <span>Ajouter au panier</span>
-                  </button>
-                </div>
-                
-                {/* Message de confirmation d'ajout au panier pour la modal */}
-                {selectedProduct && cartMessages[selectedProduct.id] && (
-                  <div className="mt-2 bg-green-500 text-white py-1 px-2 rounded text-sm text-center animate-fade-in-out">
-                    Produit ajouté au panier
-                  </div>
-                )}
-                
-                {/* Caractéristiques du produit */}
-                {selectedProduct.category && (
-                  <div className="text-sm text-gray-500">
-                    Catégorie: <span className="font-medium text-gray-700">{selectedProduct.category.name}</span>
-                  </div>
-                )}
-                
-                <p className="text-gray-700">{selectedProduct.description}</p>
-                
-                {/* Détails supplémentaires */}
-                {selectedProduct.details && (
-                  <div className="border-t pt-3 mt-3">
-                    <h4 className="font-medium mb-2">Détails</h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      {Object.entries(selectedProduct.details).map(([key, value]) => (
-                        <div key={key} className="flex items-start">
-                          <span className="font-medium w-24 flex-shrink-0">{key}:</span>
-                          <span className="text-gray-600">{String(value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Interactions sociales */}
-                <div className="flex items-center space-x-4 pt-4 border-t">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleLike(selectedProduct.id);
-                    }}
-                    className={`flex items-center space-x-1 ${!isLoggedIn ? 'opacity-70 hover:opacity-100' : ''}`}
-                    title={isLoggedIn ? "J'aime" : "Connectez-vous pour aimer ce produit"}
-                  >
-                    <Heart 
-                      size={20} 
-                      className={`transition-colors ${likes[selectedProduct.id] ? 'fill-red-500 text-red-500' : 'text-gray-500'}`}
-                    />
-                    <span className="text-sm">{likesCount[selectedProduct.id] || 0} j'aime</span>
-                  </button>
-                  
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleDislike(selectedProduct.id);
-                    }}
-                    className={`flex items-center space-x-1 ${!isLoggedIn ? 'opacity-70 hover:opacity-100' : ''}`}
-                    title={isLoggedIn ? "Je n'aime pas" : "Connectez-vous pour ne pas aimer ce produit"}
-                  >
-                    <ThumbsDown 
-                      size={20} 
-                      className={`transition-colors ${dislikes[selectedProduct.id] ? 'fill-blue-500 text-blue-500' : 'text-gray-500'}`}
-                    />
-                    <span className="text-sm">{dislikesCount[selectedProduct.id] || 0} je n'aime pas</span>
-                  </button>
-                  
-                  <div className="flex items-center space-x-1">
-                    <MessageCircle size={20} className="text-gray-500" />
-                    <span className="text-sm">{getCommentsCount(selectedProduct.id)} commentaires</span>
-                  </div>
-                </div>
-                
-                {/* Section des commentaires */}
-                <div className="border-t pt-4">
-                  <h4 className="font-medium mb-2">Commentaires ({commentsPagination.total})</h4>
-                  
-                  {/* Liste des commentaires */}
-                  {loadingComments ? (
-                    <div className="flex justify-center py-4">
-                      <Loader className="animate-spin text-blue-500" size={24} />
-                    </div>
-                  ) : (
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {comments.length === 0 ? (
-                        <p className="text-gray-500 text-center py-2">Aucun commentaire pour le moment</p>
-                      ) : (
-                        comments.map((comment) => (
-                          <div key={`comment-${comment.id}`} className="border-b pb-3 last:border-b-0">
-                            {/* Commentaire */}
-                            <div className="flex space-x-2">
-                              <div className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0 overflow-hidden">
-                                {comment.user?.photo ? (
-                                  <img 
-                                  src={formatImageUrl(comment.user.photo)} 
-                                  alt={comment.user.firstName}
-                                  className="w-full h-full object-cover"
-                                    onError={(e) => { 
-                                      e.currentTarget.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20fill%3D%22%23E0E0E0%22%20width%3D%2232%22%20height%3D%2232%22%2F%3E%3Ctext%20fill%3D%22%23757575%22%20font-family%3D%22Arial%22%20font-size%3D%2216%22%20text-anchor%3D%22middle%22%20x%3D%2216%22%20y%3D%2216%22%3E%3F%3C%2Ftext%3E%3C%2Fsvg%3E'; 
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold">
-                                    {comment.user?.firstName.charAt(0).toUpperCase() || '?'}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex justify-between items-start">
-                                  <div className="font-medium text-sm">
-                                    {comment.user?.firstName} {comment.user?.lastName}
-                                  </div>
-                                  {/* Bouton supprimer si l'utilisateur est l'auteur */}
-                                  {comment.user && isLoggedIn && JSON.parse(localStorage.getItem('user') || '{}').id === comment.user.id && (
-                                    <button 
-                                      onClick={(e) => handleDeleteComment(comment.id, e)} 
-                                      className="text-gray-400 hover:text-red-500"
-                                    >
-                                      <X size={16} />
-                                    </button>
-                                  )}
-                                </div>
-                                <p className="text-sm text-gray-600">{comment.comment}</p>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {new Date(comment.createdAt).toLocaleDateString()} à {new Date(comment.createdAt).toLocaleTimeString()}
-                                </div>
-                                
-                                {/* Bouton Répondre */}
-                                {isLoggedIn && (
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setReplyingTo(replyingTo === comment.id ? null : comment.id);
-                                      setReplyText('');
-                                    }} 
-                                    className="text-xs text-blue-500 mt-1 hover:underline"
-                                  >
-                                    {replyingTo === comment.id ? 'Annuler' : 'Répondre'}
-                                  </button>
-                                )}
-                                
-                                {/* Formulaire de réponse */}
-                                {replyingTo === comment.id && (
-                                  <div className="mt-2 flex">
-                                    <input
-                                      type="text"
-                                      value={replyText}
-                                      onChange={(e) => setReplyText(e.target.value)}
-                                      placeholder="Votre réponse..."
-                                      className="flex-1 border rounded-l-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                    <button 
-                                      onClick={(e) => handleReplyToComment(comment.id, e)}
-                                      className="bg-blue-500 text-white px-2 py-1 rounded-r-lg text-sm hover:bg-blue-600 transition-colors"
-                                    >
-                                      Envoyer
-                                    </button>
-                                  </div>
-                                )}
-                                
-                                {/* Réponses au commentaire */}
-                                {comment.replies && comment.replies.length > 0 && (
-                                  <div className="mt-2 pl-4 border-l-2 border-gray-100 space-y-2">
-                                    {comment.replies.map((reply) => (
-                                      <div key={`reply-${reply.id}`} className="flex space-x-2">
-                                        <div className="w-6 h-6 rounded-full bg-gray-300 flex-shrink-0 overflow-hidden">
-                                          {reply.user?.photo ? (
-                                            <img 
-                                            src={formatImageUrl(reply.user.photo)} 
-                                            alt={reply.user.firstName}
-                                            className="w-full h-full object-cover"
-                                              onError={(e) => { 
-                                                e.currentTarget.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20fill%3D%22%23E0E0E0%22%20width%3D%2232%22%20height%3D%2232%22%2F%3E%3Ctext%20fill%3D%22%23757575%22%20font-family%3D%22Arial%22%20font-size%3D%2216%22%20text-anchor%3D%22middle%22%20x%3D%2216%22%20y%3D%2216%22%3E%3F%3C%2Ftext%3E%3C%2Fsvg%3E'; 
-                                              }}
-                                            />
-                                          ) : (
-                                            <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold text-xs">
-                                              {reply.user?.firstName.charAt(0).toUpperCase() || '?'}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex-1">
-                                          <div className="flex justify-between items-start">
-                                          <div className="font-medium text-xs">
-                                              {reply.user?.firstName} {reply.user?.lastName}
-                                            </div>
-                                            {/* Bouton supprimer si l'utilisateur est l'auteur */}
-                                            {reply.user && isLoggedIn && JSON.parse(localStorage.getItem('user') || '{}').id === reply.user.id && (
-                                              <button 
-                                                onClick={(e) => handleDeleteReply(comment.id, reply.id, e)} 
-                                                className="text-gray-400 hover:text-red-500"
-                                              >
-                                                <X size={14} />
-                                              </button>
-                                            )}
-                                          </div>
-                                          <p className="text-xs text-gray-600">{reply.reply}</p>
-                                          <div className="text-xs text-gray-400 mt-1">
-                                            {new Date(reply.createdAt).toLocaleDateString()} à {new Date(reply.createdAt).toLocaleTimeString()}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                      
-                      {/* Pagination des commentaires */}
-                      {commentsPagination.totalPages > 1 && (
-                        <div className="flex justify-center mt-2 space-x-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (commentsPagination.page > 1) {
-                                loadProductComments(selectedProduct.id, commentsPagination.page - 1);
-                              }
-                            }}
-                            disabled={commentsPagination.page === 1}
-                            className={`px-2 py-1 rounded text-xs ${commentsPagination.page === 1 ? 'bg-gray-200 text-gray-400' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                          >
-                            Précédent
-                          </button>
-                          <span className="text-xs text-gray-500">
-                            Page {commentsPagination.page} sur {commentsPagination.totalPages}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (commentsPagination.page < commentsPagination.totalPages) {
-                                loadProductComments(selectedProduct.id, commentsPagination.page + 1);
-                              }
-                            }}
-                            disabled={commentsPagination.page === commentsPagination.totalPages}
-                            className={`px-2 py-1 rounded text-xs ${commentsPagination.page === commentsPagination.totalPages ? 'bg-gray-200 text-gray-400' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                          >
-                            Suivant
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Ajouter un commentaire */}
-                  <div className="mt-4 flex">
-                    <input
-                      type="text"
-                      value={newCommentText}
-                      onChange={(e) => setNewCommentText(e.target.value)}
-                      placeholder="Ajouter un commentaire..."
-                      className="flex-1 border rounded-l-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!isLoggedIn) {
-                          window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
-                        }
-                      }}
-                    />
-                    <button 
-                      className="bg-blue-500 text-white px-4 py-2 rounded-r-lg hover:bg-blue-600 transition-colors"
-                      onClick={(e) => handleAddComment(selectedProduct.id, e)}
-                      disabled={!isLoggedIn || !newCommentText.trim()}
-                    >
-                      Publier
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ProductDetailModal
+          product={selectedProduct}
+          isLoggedIn={isLoggedIn}
+          currentUserId={user?.id}
+          onClose={closeModal}
+          onAddToCart={(product) => void handleAddToCart(product)}
+          cartMessage={Boolean(cartMessages[selectedProduct.id])}
+          onReactionChange={(productId, state) => {
+            setLikes((prev) => ({ ...prev, [productId]: state.liked }));
+            setDislikes((prev) => ({ ...prev, [productId]: state.disliked }));
+            setLikesCount((prev) => ({ ...prev, [productId]: state.likesCount }));
+            setDislikesCount((prev) => ({ ...prev, [productId]: state.dislikesCount }));
+            setCommentsCountByProduct((prev) => ({ ...prev, [productId]: state.commentsCount }));
+          }}
+        />
       )}
     </div>
   );

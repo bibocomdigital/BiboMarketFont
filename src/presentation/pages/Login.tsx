@@ -5,15 +5,19 @@ import Image from "next/image";
 import { useLocation } from "react-router-dom";
 import { CheckCircle } from "lucide-react";
 import LoginFormContent from "@/components/forms/login/LoginFormContent";
-import { AuthBrand } from "@/components/auth/AuthBrand";
+import { BackButton } from "@/components/auth/BackButton";
 import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
 import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
   const location = useLocation();
   const { toast } = useToast();
-  const verificationSuccessful = location.state?.verificationSuccessful || false;
-  const verifiedEmail = location.state?.email || "";
+  const locationState = location.state as {
+    verificationSuccessful?: boolean;
+    email?: string;
+  } | null;
+  const verificationSuccessful = locationState?.verificationSuccessful || false;
+  const verifiedEmail = locationState?.email || "";
 
   useEffect(() => {
     if (verificationSuccessful) {
@@ -30,9 +34,7 @@ const Login = () => {
       left={
         <div className="flex w-full items-center gap-6 px-10 xl:px-16 py-12">
           <div className="max-w-md animate-login-slide-up">
-            <AuthBrand light />
-
-            <h1 className="auth-hero-title mt-16 text-white">
+            <h1 className="auth-hero-title text-white">
               Bienvenue sur
               <span className="block">BibocomMarket</span>
             </h1>
@@ -65,9 +67,7 @@ const Login = () => {
     >
       <div className="w-full">
         <div className="mb-8">
-          <div className="mb-6">
-            <AuthBrand />
-          </div>
+          <BackButton />
           <h2 className="auth-form-title text-bibocom-primary">Connexion</h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">
             Accédez à votre compte BibocomMarket

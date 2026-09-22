@@ -18,6 +18,7 @@ import {
   AdminSelect,
   ConfirmBar,
   GhostButton,
+  MobileCard,
   PaginationBar,
   Panel,
   StateMessage,
@@ -109,7 +110,8 @@ export function AdminUsersView({
         ) : users.length === 0 ? (
           <StateMessage>Aucun utilisateur trouvé.</StateMessage>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-white/5">
@@ -174,6 +176,70 @@ export function AdminUsersView({
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {users.map((user) => (
+              <MobileCard key={user.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{fullName(user)}</p>
+                    <p className="truncate text-xs text-white/50">{user.email || "—"}</p>
+                  </div>
+                  <StatusPill active={!!user.isVerified} />
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <dt className="text-white/40">Téléphone</dt>
+                    <dd className="text-white/80">{user.phoneNumber || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Ville</dt>
+                    <dd className="text-white/80">{user.city || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Boutique</dt>
+                    <dd className="text-white/80">{user.shop?.name || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-white/40">Rôle</dt>
+                    <dd className="mt-1">
+                      <AdminSelect
+                        value={String(user.role || "")}
+                        onChange={(event) =>
+                          patchUser.mutate(
+                            { id: user.id, body: { role: event.target.value } },
+                            { onError: notifyError }
+                          )
+                        }
+                      >
+                        {ROLE_ORDER.map((item) => (
+                          <option key={item} value={item}>
+                            {roleLabel(item)}
+                          </option>
+                        ))}
+                      </AdminSelect>
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <GhostButton
+                    onClick={() =>
+                      patchUser.mutate(
+                        { id: user.id, body: { isVerified: !user.isVerified } },
+                        { onError: notifyError }
+                      )
+                    }
+                  >
+                    {user.isVerified ? "Retirer vérif." : "Vérifier"}
+                  </GhostButton>
+                  {String(user.role || "").toUpperCase() === "MERCHANT" && onMessageMerchant ? (
+                    <GhostButton onClick={() => onMessageMerchant(user.id)}>Écrire</GhostButton>
+                  ) : null}
+                  <GhostButton onClick={() => setConfirmDelete(user.id)}>Supprimer</GhostButton>
+                </div>
+              </MobileCard>
+            ))}
+          </div>
+          </>
         )}
         {pagination ? (
           <PaginationBar

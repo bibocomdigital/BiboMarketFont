@@ -14,6 +14,7 @@ import {
   AdminSelect,
   ConfirmBar,
   GhostButton,
+  MobileCard,
   PaginationBar,
   Panel,
   StateMessage,
@@ -115,7 +116,8 @@ export function AdminProductsView({ enabled }: { enabled: boolean }) {
         ) : products.length === 0 ? (
           <StateMessage>Aucun produit trouvé.</StateMessage>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-white/5">
@@ -160,7 +162,7 @@ export function AdminProductsView({ enabled }: { enabled: boolean }) {
                                   status: product.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED",
                                 },
                               },
-                              { onError: notifyError }
+                              { onError: (error) => notifyError(error) }
                             )
                           }
                         >
@@ -177,6 +179,55 @@ export function AdminProductsView({ enabled }: { enabled: boolean }) {
               </tbody>
             </table>
           </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {products.map((product) => (
+              <MobileCard key={product.id}>
+                <div className="flex items-center gap-3">
+                  {product.images?.[0]?.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.images[0].imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                  ) : (
+                    <span className="h-12 w-12 rounded-lg bg-white/10" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{product.name}</p>
+                    <p className="truncate text-xs text-white/50">
+                      {product.shop?.name || "—"} · {product.categorieProd?.name || "—"}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                  <span className="text-white/80">{formatFcfa(product.price)}</span>
+                  <span className={product.stock < 10 ? "text-amber-300" : "text-white/60"}>
+                    Stock : {product.stock}
+                  </span>
+                  <span className="text-xs text-white/50">{productStatusLabel(product.status)}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <GhostButton
+                    onClick={() =>
+                      patchProduct.mutate(
+                        {
+                          id: product.id,
+                          body: {
+                            status: product.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED",
+                          },
+                        },
+                        { onError: (error) => notifyError(error) }
+                      )
+                    }
+                  >
+                    {product.status === "PUBLISHED" ? "Dépublier" : "Publier"}
+                  </GhostButton>
+                  <GhostButton onClick={() => setStockEdit({ id: product.id, stock: product.stock })}>
+                    Stock
+                  </GhostButton>
+                  <GhostButton onClick={() => setConfirmDelete(product.id)}>Supprimer</GhostButton>
+                </div>
+              </MobileCard>
+            ))}
+          </div>
+          </>
         )}
         {pagination ? (
           <PaginationBar
@@ -207,7 +258,7 @@ export function AdminProductsView({ enabled }: { enabled: boolean }) {
           onConfirm={() => {
             patchProduct.mutate(
               { id: stockEdit.id, body: { stock: stockEdit.stock } },
-              { onError: notifyError, onSettled: () => setStockEdit(null) }
+              { onError: (error) => notifyError(error), onSettled: () => setStockEdit(null) }
             );
           }}
         />
@@ -237,7 +288,7 @@ export function AdminProductsView({ enabled }: { enabled: boolean }) {
           onConfirm={() => {
             patchProduct.mutate(
               { id: conflict.productId, body: { status: "DRAFT" } },
-              { onError: notifyError }
+                              { onError: (error) => notifyError(error) }
             );
             setConflict(null);
           }}

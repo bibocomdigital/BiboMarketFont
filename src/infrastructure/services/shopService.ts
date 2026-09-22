@@ -29,7 +29,11 @@ export interface ShopProduct {
   price: number;
   stock: number;
   shopId: number;
+  userId?: number;
+  status?: 'DRAFT' | 'PUBLISHED';
   videoUrl?: string;
+  likesCount?: number;
+  commentsCount?: number;
   category?: string; 
   createdAt: string;
   updatedAt: string;

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Link, useLocation } from "react-router-dom";
 import { Headphones, ShieldCheck, Truck } from "lucide-react";
 import RegisterForm from "@/components/forms/RegisterForm";
-import { AuthBrand } from "@/components/auth/AuthBrand";
+import { BackButton } from "@/components/auth/BackButton";
 import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
 import { UserRole } from "@/types/user";
 
@@ -51,8 +51,6 @@ const Register = () => {
       contentClassName="max-w-[480px]"
       left={
         <div className="flex w-full flex-col px-10 xl:px-16 py-10">
-          <AuthBrand light />
-
           <div className="flex flex-1 items-center gap-6">
             <div className="max-w-md animate-login-slide-up">
               <h1 className="auth-hero-title text-white">
@@ -113,7 +111,7 @@ const Register = () => {
     >
       <div className="w-full">
         <div className="mb-8">
-          <AuthBrand />
+          <BackButton />
           <h2 className="auth-form-title mt-6 text-bibocom-primary">Inscription</h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">
             Créez votre compte et commencez dès maintenant

@@ -411,7 +411,7 @@ const MessagePage: React.FC = () => {
   // Si l'utilisateur n'est pas connecté, rediriger vers la page de connexion
   if (!isUserLoggedIn) {
     return (
-      <div className="flex flex-col h-screen bg-gray-900 text-white">
+      <div className="flex flex-col h-dvh bg-gray-900 text-white">
         <div className="flex items-center p-4 bg-gray-800 border-b border-gray-700">
           <Button variant="ghost" onClick={goBack} className="text-white mr-2">
             <ArrowLeft size={20} />
@@ -438,7 +438,7 @@ const MessagePage: React.FC = () => {
 
   if (loading || !recipient) {
     return (
-      <div className="flex flex-col h-screen bg-gray-900 text-white">
+      <div className="flex flex-col h-dvh bg-gray-900 text-white">
         <div className="flex items-center p-4 bg-gray-800 border-b border-gray-700">
           <Button variant="ghost" onClick={goBack} className="text-white mr-2">
             <ArrowLeft size={20} />
@@ -453,7 +453,7 @@ const MessagePage: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
+    <div className="flex flex-col h-dvh bg-gray-900 text-white">
       {/* En-tête avec les informations du profil */}
       <div className="flex items-center p-4 bg-gray-800 border-b border-gray-700">
         <Button variant="ghost" onClick={goBack} className="text-white mr-2">

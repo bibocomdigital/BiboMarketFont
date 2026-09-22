@@ -378,6 +378,15 @@ export function MerchantMessagesView({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const isAdminInbox = variant === "admin";
   const isClientInbox = variant === "client";
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(query.matches);
+    query.addEventListener("change", update);
+    update();
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -463,9 +472,10 @@ export function MerchantMessagesView({
   }, [conversations, search, filter, searchHits, user?.id, variant]);
 
   useEffect(() => {
+    if (!isDesktop) return;
     if (selectedId !== null || conversations.length === 0 || composeOpen) return;
     setSelectedId(conversations[0].partnerId);
-  }, [conversations, selectedId, composeOpen]);
+  }, [conversations, selectedId, composeOpen, isDesktop]);
 
   const lastIncomingId = useMemo(
     () => [...thread.messages].reverse().find((item) => item.senderId !== user?.id)?.id,
@@ -713,7 +723,7 @@ export function MerchantMessagesView({
         ) : (
           <>
             <header className={cn("flex items-center justify-between gap-3 px-4 py-3", ui.threadHeader)}>
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <button
                   type="button"
                   className={cn(
@@ -727,11 +737,11 @@ export function MerchantMessagesView({
                   ← Retour
                 </button>
                 <Avatar name={partnerName} photo={thread.partner?.photo || selected?.partnerPhoto} status={realtime.isOnline(selectedId)} tone={variant} />
-                <div>
-                  <p className={cn("font-semibold", ui.name)}>{partnerName || "Conversation"}</p>
+                <div className="min-w-0">
+                  <p className={cn("truncate font-semibold", ui.name)}>{partnerName || "Conversation"}</p>
                   <p
                     className={cn(
-                      "text-xs font-medium",
+                      "truncate text-xs font-medium",
                       realtime.isTyping(selectedId)
                         ? ui.typing
                         : realtime.isOnline(selectedId)
@@ -752,7 +762,7 @@ export function MerchantMessagesView({
                   </p>
                 </div>
               </div>
-              <div className={cn("flex items-center gap-1", ui.headerAction)}>
+              <div className={cn("hidden items-center gap-1 sm:flex", ui.headerAction)}>
                 <IconButton label="Appel" className={ui.headerActionBtn}>
                   <Phone className="h-4 w-4" />
                 </IconButton>

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 
 interface PhoneInputProps {
   form: any;
-  field: any; // Nouvelle prop pour recevoir le field de react-hook-form
+  field?: { name?: string; value?: string; onChange?: (value: string) => void };
   selectedCountry?: Country;
   onCountryChange?: (country: Country) => void;
   className?: string;
@@ -37,7 +37,7 @@ const PhoneInput = ({
 
   // Initialize phone number from field value if it exists
   useEffect(() => {
-    if (field.value && field.value.includes('+')) {
+    if (field?.value && String(field.value).includes('+')) {
       // Extraire le code pays et le numéro si une valeur existe déjà
       const dialCode = field.value.match(/^\+\d+/)?.[0];
       const country = countries.find(c => c.dialCode === dialCode);
@@ -58,9 +58,11 @@ const PhoneInput = ({
 
   const updateFullPhoneNumber = (phoneNumber: string) => {
     const fullNumber = `${currentCountry.dialCode}${phoneNumber}`;
-    // Met à jour à la fois le form et le field
-    form.setValue('login', fullNumber);
-    field.onChange(fullNumber);
+    field?.onChange?.(fullNumber);
+    if (form?.setValue) {
+      const fieldName = field?.name === 'login' ? 'login' : 'phoneNumber';
+      form.setValue(fieldName, fullNumber);
+    }
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {

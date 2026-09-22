@@ -232,6 +232,11 @@ const Profile = () => {
     fileInputRef.current?.click();
   };
 
+  const handleAvatarClick = () => {
+    if (!isEditing) setIsEditing(true);
+    triggerFileInput();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-bibocom-light to-white pt-24 pb-10 px-4 sm:px-6">
       <div className="max-w-6xl mx-auto">
@@ -265,30 +270,23 @@ const Profile = () => {
                         </AvatarFallback>
                       </Avatar>
                       {isOwnProfile && (
-                        isEditing ? (
-                          <>
-                            <input
-                              type="file"
-                              ref={fileInputRef}
-                              className="hidden"
-                              accept="image/*"
-                              onChange={handleAvatarChange}
-                            />
-                            <button 
-                              className="absolute bottom-0 right-0 bg-bibocom-primary rounded-full p-1.5 text-white shadow-md hover:bg-bibocom-accent transition-colors"
-                              onClick={triggerFileInput}
-                            >
-                              <Camera size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <button 
+                        <>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept="image/*"
+                            onChange={handleAvatarChange}
+                          />
+                          <button
+                            type="button"
                             className="absolute bottom-0 right-0 bg-bibocom-primary rounded-full p-1.5 text-white shadow-md hover:bg-bibocom-accent transition-colors"
-                            onClick={handleEdit}
+                            onClick={handleAvatarClick}
+                            aria-label="Changer la photo"
                           >
                             <Camera size={16} />
                           </button>
-                        )
+                        </>
                       )}
                     </div>
                     <h3 className="text-xl font-bold">{userInfo.firstName} {userInfo.lastName}</h3>
