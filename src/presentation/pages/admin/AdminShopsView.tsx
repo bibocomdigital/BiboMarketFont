@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getErrorStatus, getUserErrorMessage } from "@domain/errors/app-error";
 import { useToast } from "@/hooks/use-toast";
 import { formatImageUrl } from "@/services/shopService";
 import { fullName } from "@/lib/admin-analytics";
+import { adminKeys } from "@/lib/query-keys";
+import { grantBadge, revokeBadge } from "@/services/badgeService";
 import {
   useAdminShopQuery,
   useAdminShopsListQuery,
@@ -26,8 +29,15 @@ import {
   queryErrorMessage,
 } from "./ui";
 
-export function AdminShopsView({ enabled }: { enabled: boolean }) {
+export function AdminShopsView({
+  enabled,
+  canManageBadge = true,
+}: {
+  enabled: boolean;
+  canManageBadge?: boolean;
+}) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
@@ -62,6 +72,16 @@ export function AdminShopsView({ enabled }: { enabled: boolean }) {
       return;
     }
     toast({ title: "Action impossible", description: message, variant: "destructive" });
+  };
+
+  const toggleBadge = async (userId: number, active: boolean) => {
+    try {
+      if (active) await revokeBadge(userId);
+      else await grantBadge(userId);
+      await queryClient.invalidateQueries({ queryKey: adminKeys.all });
+    } catch (error) {
+      notifyError(error);
+    }
   };
 
   return (
@@ -160,16 +180,11 @@ export function AdminShopsView({ enabled }: { enabled: boolean }) {
                     </Td>
                     <Td>
                       <div className="flex gap-2">
-                        <GhostButton
-                          onClick={() =>
-                            patchShop.mutate(
-                              { id: shop.id, body: { verifiedBadge: !shop.verifiedBadge } },
-                              { onError: (error) => notifyError(error) }
-                            )
-                          }
-                        >
-                          {shop.verifiedBadge ? "Retirer badge" : "Vérifier"}
-                        </GhostButton>
+                        {canManageBadge ? (
+                          <GhostButton onClick={() => void toggleBadge(shop.userId, shop.verifiedBadge === true)}>
+                            {shop.verifiedBadge ? "Retirer badge" : "Attribuer le badge"}
+                          </GhostButton>
+                        ) : null}
                         <GhostButton
                           onClick={() =>
                             patchShop.mutate(
@@ -225,16 +240,11 @@ export function AdminShopsView({ enabled }: { enabled: boolean }) {
                   </div>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <GhostButton
-                    onClick={() =>
-                      patchShop.mutate(
-                        { id: shop.id, body: { verifiedBadge: !shop.verifiedBadge } },
-                        { onError: (error) => notifyError(error) }
-                      )
-                    }
-                  >
-                    {shop.verifiedBadge ? "Retirer badge" : "Vérifier"}
-                  </GhostButton>
+                  {canManageBadge ? (
+                    <GhostButton onClick={() => void toggleBadge(shop.userId, shop.verifiedBadge === true)}>
+                      {shop.verifiedBadge ? "Retirer badge" : "Attribuer le badge"}
+                    </GhostButton>
+                  ) : null}
                   <GhostButton
                     onClick={() =>
                       patchShop.mutate(

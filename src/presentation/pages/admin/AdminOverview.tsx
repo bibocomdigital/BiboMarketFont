@@ -100,7 +100,14 @@ export function AdminOverview({
     ...row,
     label: monthLabel(row.month),
   }));
-  const roles = kpis.usersByRole || { ADMIN: 0, MERCHANT: 0, CLIENT: 0, SUPPLIER: 0 };
+  const roles = kpis.usersByRole || {
+    SUPER_ADMIN: 0,
+    ADMIN: 0,
+    MODERATOR: 0,
+    MERCHANT: 0,
+    CLIENT: 0,
+    SUPPLIER: 0,
+  };
   const cities = data.demographics?.cities || [];
   const payments = kpis.paymentMethods || { CASH_ON_DELIVERY: 0, MOBILE_MONEY: 0 };
 

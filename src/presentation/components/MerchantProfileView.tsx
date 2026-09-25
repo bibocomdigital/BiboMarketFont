@@ -8,11 +8,8 @@ import {
   Phone, 
   MapPin, 
   Calendar, 
-  ShoppingBag,
-  Users,
   UserPlus,
   UserMinus,
-  Heart,
   Loader,
   LogIn,
   MessageSquare
@@ -20,30 +17,37 @@ import {
 
 // Services
 import { getPhotoUrl, getCurrentUser } from '@/services/authService';
+import { getUserErrorMessage } from '@domain/errors/app-error';
 import { useFollowersQuery, useFollowingQuery, useFollowStatusQuery } from '@/hooks/queries/use-user-query';
 import { useToggleFollowMutation } from '@/hooks/mutations/use-catalog-mutations';
 
 // Composant UI Button
 import { Button } from '@/components/ui/button';
 
-const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
+const MerchantProfileView = ({ merchant, onClose, isModal = false, compact = false }) => {
   // Hook de navigation pour rediriger vers la page de connexion
   const navigate = useNavigate();
   
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
-  const ownerId = merchant?.owner?.id as number | undefined;
-  const followersQuery = useFollowersQuery(ownerId ?? null);
-  const followingQuery = useFollowingQuery(ownerId ?? null);
-  const followStatusQuery = useFollowStatusQuery(ownerId ?? null, isUserLoggedIn);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const ownerId = Number(merchant?.owner?.id) || null;
+  const followersQuery = useFollowersQuery(ownerId);
+  const followingQuery = useFollowingQuery(ownerId);
+  const followStatusQuery = useFollowStatusQuery(ownerId, isUserLoggedIn);
   const toggleFollowMutation = useToggleFollowMutation();
+  const isOwnProfile = currentUserId != null && ownerId != null && currentUserId === ownerId;
   const followData = {
     isFollowing: followStatusQuery.data?.isFollowing ?? false,
-    followerCount: followersQuery.data?.pagination.total ?? 0,
+    followerCount: toggleFollowMutation.data?.followerCount
+      ?? followersQuery.data?.pagination.total
+      ?? 0,
     followingCount: followingQuery.data?.pagination.total ?? 0,
   };
   const loading = (followersQuery.isPending && !followersQuery.data) || (followingQuery.isPending && !followingQuery.data);
   const actionLoading = toggleFollowMutation.isPending;
   const [error, setError] = useState(null);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const followingList = followingQuery.data?.following ?? [];
 
   // S'assurer que l'objet merchant est valide
   const isValidMerchant = merchant && typeof merchant === 'object';
@@ -57,6 +61,7 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
   useEffect(() => {
     const user = getCurrentUser();
     setIsUserLoggedIn(!!user);
+    setCurrentUserId(user?.id != null ? Number(user.id) : null);
   }, []);
 
   // Redirection vers la page de connexion
@@ -73,26 +78,27 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
     }
     
    
-    navigate(`/messages/${owner.id}`);
+    navigate(`/client-dashboard?view=messages&partner=${owner.id}`);
   };
 
   // Gérer l'abonnement / désabonnement
   const handleToggleFollow = async () => {
-    if (!owner.id) return;
-    
-    // Vérifier si l'utilisateur est connecté
+    if (!ownerId) return;
     if (!isUserLoggedIn) {
-      // Rediriger vers la page de connexion
       redirectToLogin();
       return;
     }
-    
+    if (isOwnProfile) {
+      setError('Vous ne pouvez pas suivre votre propre profil');
+      return;
+    }
+
+    setError(null);
     try {
-      await toggleFollowMutation.mutateAsync(owner.id);
-      setError(null);
+      await toggleFollowMutation.mutateAsync(ownerId);
     } catch (err) {
       console.error('Erreur lors du changement d\'abonnement:', err);
-      setError('Échec de l\'opération');
+      setError(getUserErrorMessage(err) || 'Impossible de mettre à jour l’abonnement');
     }
   };
 
@@ -111,23 +117,15 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
     }
   };
 
-  // Rendu du bouton Suivre/Se désabonner en fonction de l'état de connexion
   const renderFollowButton = () => {
-    // Si l'utilisateur n'est pas connecté
-    if (!isUserLoggedIn) {
+    if (isOwnProfile) {
       return (
-        <Button 
-          variant="default"
-          className="flex-1 bg-orange-500 text-white hover:bg-orange-600"
-          onClick={redirectToLogin}
-        >
-          <LogIn size={16} className="mr-2" />
-          Se connecter pour suivre
+        <Button variant="secondary" className="flex-1 bg-gray-100 text-gray-500" disabled>
+          Votre boutique
         </Button>
       );
     }
-    
-    // Si l'utilisateur est connecté
+
     return (
       <Button 
         variant={followData.isFollowing ? "secondary" : "default"}
@@ -139,42 +137,19 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
         onClick={handleToggleFollow}
         disabled={actionLoading}
       >
-        {actionLoading ? (
-          <span className="flex items-center">
-            <Loader size={16} className="animate-spin mr-2" />
-            Chargement...
-          </span>
-        ) : followData.isFollowing ? (
+        {followData.isFollowing ? (
           <>
-            <UserMinus size={16} className="mr-2" />
+            {actionLoading ? <Loader size={16} className="mr-2 animate-spin" /> : <UserMinus size={16} className="mr-2" />}
             Se désabonner
           </>
         ) : (
           <>
-            <UserPlus size={16} className="mr-2" />
+            {actionLoading ? <Loader size={16} className="mr-2 animate-spin" /> : <UserPlus size={16} className="mr-2" />}
             Suivre
           </>
         )}
       </Button>
     );
-  };
-
-  // Message pour les utilisateurs non connectés
-  const renderConnectionMessage = () => {
-    if (!isUserLoggedIn && !loading) {
-      return (
-        <div className="bg-yellow-50 border border-yellow-100 text-yellow-700 p-2 rounded text-sm mb-4 flex items-center justify-between">
-          <span>Connectez-vous pour suivre</span>
-          <button 
-            onClick={redirectToLogin} 
-            className="text-blue-600 hover:underline text-xs font-medium"
-          >
-            Se connecter
-          </button>
-        </div>
-      );
-    }
-    return null;
   };
 
   // Contenu principal du profil
@@ -187,11 +162,10 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
         </div>
       ) : (
         <>
-          {/* Profile section */}
-          <div className="p-6">
-            <div className="flex items-start gap-5">
+          <div className={compact ? "p-0" : "p-6"}>
+            <div className="flex items-center gap-3">
               {/* Photo */}
-              <div className="w-20 h-20 rounded-full border-2 border-orange-500 p-0.5 overflow-hidden flex-shrink-0">
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-orange-500 p-0.5">
                 {owner.photo ? (
                   <img 
                     src={getPhotoUrl(owner.photo)}
@@ -211,36 +185,65 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
                 )}
               </div>
               
-              {/* Infos */}
-              <div className="flex-1">
-                <h2 className="text-xl font-bold text-gray-800">
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-lg font-bold text-gray-800">
                   {owner.firstName || ''} {owner.lastName || ''}
                 </h2>
-                
-                <div className="text-sm text-gray-500">
-                  {merchant.name || ''}
-                </div>
-                
-                {/* Statistiques */}
-                <div className="flex gap-4 mt-3">
-                  <div className="text-center">
-                    <p className="font-bold text-gray-800">{stats.totalProducts || 0}</p>
-                    <p className="text-xs text-gray-500">Produits</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="font-bold text-gray-800">{followData.followerCount}</p>
-                    <p className="text-xs text-gray-500">Abonnés</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="font-bold text-gray-800">{followData.followingCount}</p>
-                    <p className="text-xs text-gray-500">Abonnements</p>
-                  </div>
-                </div>
+                <p className="truncate text-sm text-gray-500">{merchant.name || ''}</p>
               </div>
             </div>
-            
-            {/* Message de connexion */}
-            {renderConnectionMessage()}
+
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div className="min-w-0 rounded-xl bg-slate-50 px-1 py-2">
+                <p className="font-bold text-gray-800">{stats.totalProducts || 0}</p>
+                <p className="text-[11px] leading-tight text-gray-500">Produits</p>
+              </div>
+              <div className="min-w-0 rounded-xl bg-slate-50 px-1 py-2">
+                <p className="font-bold text-gray-800">{followData.followerCount}</p>
+                <p className="text-[11px] leading-tight text-gray-500">Abonnés</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFollowing((open) => !open)}
+                className={`min-w-0 rounded-xl px-1 py-2 ${showFollowing ? "bg-orange-50" : "bg-slate-50 hover:bg-orange-50"}`}
+                aria-expanded={showFollowing}
+              >
+                <p className="font-bold text-gray-800">{followData.followingCount}</p>
+                <p className="text-[11px] leading-tight text-bibocom-accent">Abonnements</p>
+              </button>
+            </div>
+
+            {showFollowing && (
+              <div className="mt-4 rounded-2xl bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-bibocom-primary">Abonnements</p>
+                {followingQuery.isPending ? (
+                  <p className="mt-2 text-xs text-slate-500">Chargement…</p>
+                ) : followingQuery.isError ? (
+                  <p className="mt-2 text-xs text-red-500">Impossible de charger les abonnements.</p>
+                ) : followingList.length === 0 ? (
+                  <p className="mt-2 text-xs text-slate-500">Cette boutique ne suit encore personne.</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {followingList.map((person) => {
+                      const name = `${person.firstName || ""} ${person.lastName || ""}`.trim() || "Utilisateur";
+                      const photo = person.photo ? getPhotoUrl(person.photo) : "";
+                      return (
+                        <li key={person.id} className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-600">
+                            {photo ? (
+                              <img src={photo} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              name.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <span className="min-w-0 truncate text-sm text-gray-800">{name}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
             
             {/* Message d'erreur */}
             {error && (
@@ -249,29 +252,41 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
               </div>
             )}
             
-            {/* Boutons action */}
             <div className="mt-4 flex gap-2">
-              {renderFollowButton()}
-              <Button
-                variant="secondary"
-                className="flex-1 bg-gray-100 text-gray-800 hover:bg-gray-200"
-                onClick={handleMessageClick}
-              >
-                <MessageSquare size={16} className="mr-2" />
-                Message
-              </Button>
+              {isUserLoggedIn ? (
+                <>
+                  {renderFollowButton()}
+                  <Button
+                    variant="secondary"
+                    className="flex-1 bg-gray-100 text-gray-800 hover:bg-gray-200"
+                    onClick={handleMessageClick}
+                  >
+                    <MessageSquare size={16} className="mr-2" />
+                    Message
+                  </Button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={redirectToLogin}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-bibocom-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-bibocom-accent/90"
+                >
+                  <LogIn size={16} />
+                  Se connecter pour suivre
+                </button>
+              )}
             </div>
             
-            {/* Description */}
-            {merchant.description && (
-              <div className="mt-4 text-gray-700 text-sm">
+            {isModal && merchant.description && (
+              <div className="mt-4 text-sm text-gray-700">
                 {merchant.description}
               </div>
             )}
           </div>
           
-          {/* Informations de contact */}
-          <div className="border-t border-gray-100 p-6 space-y-4 bg-gray-50">
+          {!compact && (
+          <>
+          <div className="space-y-4 border-t border-gray-100 bg-gray-50 p-6">
             <h4 className="font-semibold text-gray-700">Informations de contact</h4>
             
             {/* Email */}
@@ -319,32 +334,8 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
             )}
           </div>
           
-          {/* Footer avec badges et statistiques */}
-          <div className="bg-orange-50 p-4 flex justify-around">
-            <div className="text-center">
-              <ShoppingBag className="mx-auto mb-1 text-orange-500" size={20} />
-              <p className="text-xs text-gray-500">Produits</p>
-              <p className="font-bold text-orange-600">
-                {stats.totalProducts || 0}
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <Users className="mx-auto mb-1 text-orange-500" size={20} />
-              <p className="text-xs text-gray-500">Abonnés</p>
-              <p className="font-bold text-orange-600">
-                {followData.followerCount}
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <Heart className="mx-auto mb-1 text-orange-500" size={20} />
-              <p className="text-xs text-gray-500">Likes</p>
-              <p className="font-bold text-orange-600">
-                {merchant.likesCount || 0}
-              </p>
-            </div>
-          </div>
+          </>
+          )}
         </>
       )}
     </>
@@ -374,7 +365,7 @@ const MerchantProfileView = ({ merchant, onClose, isModal = false }) => {
   }
 
   // Rendu pour une intégration directe dans la page (non-modal)
-  return <div className="merchant-profile-content overflow-hidden">{profileContent}</div>;
+  return <div className="merchant-profile-content">{profileContent}</div>;
 };
 
 export default MerchantProfileView;

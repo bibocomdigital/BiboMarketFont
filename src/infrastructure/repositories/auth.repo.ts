@@ -32,6 +32,9 @@ class AuthRepository implements AuthRepositoryInputPort {
 
   async login(credentials: LoginCredentials): Promise<AuthResult> {
     const result = await loginService(credentials);
+    if (!result.token || !result.user) {
+      throw new Error("Code de double authentification requis");
+    }
     return {
       token: result.token,
       user: toUser(result.user),

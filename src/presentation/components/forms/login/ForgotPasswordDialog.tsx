@@ -9,7 +9,10 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader, AlertCircle, Check } from 'lucide-react';
 import { z } from 'zod';
+import { useForm } from 'react-hook-form';
 import { useForgotPasswordMutation, useResetPasswordMutation } from '@/hooks/mutations/use-auth-mutations';
+import { getUserErrorMessage } from '@domain/errors/app-error';
+import PhoneInput from '../register/PhoneInput';
 
 interface ForgotPasswordDialogProps {
   open: boolean;
@@ -20,18 +23,12 @@ interface ForgotPasswordDialogProps {
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
-const isEmailValue = (value: string) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-
 const isPhoneValue = (value: string) =>
   /^\+?[0-9]{9,15}$/.test(value.replace(/\s/g, ""));
 
-const identifierSchema = z.string().refine(
-  (value) => isEmailValue(value) || isPhoneValue(value),
-  {
-    message: "Veuillez saisir un email ou un téléphone valide (ex : +221771234567)",
-  }
-);
+const identifierSchema = z.string().refine(isPhoneValue, {
+  message: "Veuillez saisir un téléphone valide (ex : +221771234567)",
+});
 const codeSchema = z
   .string()
   .regex(/^\d{6}$/, "Le code doit contenir exactement 6 chiffres");
@@ -50,12 +47,15 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetIdentifier, setResetIde
   const resetMutation = useResetPasswordMutation();
   const isLoading = forgotMutation.isPending || resetMutation.isPending;
   const [error, setError] = useState<string | null>(null);
+  const phoneForm = useForm<{ phoneNumber: string }>({
+    defaultValues: { phoneNumber: resetIdentifier || "+221" },
+  });
 
-  const channel = isEmailValue(resetIdentifier)
-    ? 'email'
-    : isPhoneValue(resetIdentifier)
-      ? 'phone'
-      : null;
+  useEffect(() => {
+    if (!open) return;
+    const next = resetIdentifier || "+221";
+    phoneForm.setValue("phoneNumber", next);
+  }, [open, resetIdentifier, phoneForm]);
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
@@ -65,29 +65,26 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetIdentifier, setResetIde
     return () => clearTimeout(timer);
   }, [resendCountdown]);
 
-  const buildResetPayload = () => {
-    if (channel === 'email') {
-      return { email: resetIdentifier.trim(), phoneNumber: undefined };
-    }
-    if (channel === 'phone') {
-      return { phoneNumber: resetIdentifier.replace(/\s/g, ""), email: undefined };
-    }
-    return null;
-  };
+  const phoneNumber = () => phoneForm.getValues("phoneNumber").replace(/\s/g, "");
+
+  const buildResetPayload = () => ({
+    phoneNumber: phoneNumber(),
+  });
 
   const handleResetPassword = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (forgotMutation.isPending) return;
     setError(null);
 
-    const validationResult = identifierSchema.safeParse(resetIdentifier);
+    const phone = phoneNumber();
+    setResetIdentifier(phone);
+    const validationResult = identifierSchema.safeParse(phone);
     if (!validationResult.success) {
-      setError("Veuillez saisir un email ou un téléphone valide");
+      setError("Veuillez saisir un téléphone valide");
       return;
     }
 
     const payload = buildResetPayload();
-    if (!payload) return;
 
     try {
       const data = await forgotMutation.mutateAsync(payload);
@@ -105,10 +102,11 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetIdentifier, setResetIde
 
       setStep('code');
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Une erreur est survenue lors de l'envoi du code");
+      const message = getUserErrorMessage(error);
+      setError(message);
       toast({
         title: "Erreur",
-        description: error instanceof Error ? error.message : "Une erreur est survenue",
+        description: message,
         variant: "destructive",
       });
     }
@@ -142,14 +140,9 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetIdentifier, setResetIde
       return;
     }
 
-    const request =
-      channel === 'phone'
-        ? { phone: resetIdentifier.replace(/\s/g, ""), email: undefined }
-        : { email: resetIdentifier.trim(), phone: undefined };
-
     try {
       await resetMutation.mutateAsync({
-        ...request,
+        phone: phoneNumber(),
         code: verificationCode,
         newPassword,
       });
@@ -166,7 +159,7 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetIdentifier, setResetIde
         navigate('/login');
       }, 2000);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Une erreur est survenue";
+      const message = getUserErrorMessage(error);
 
       if (message.includes("incorrect")) {
         setError("Code de vérification incorrect. Veuillez vérifier et réessayer.");
@@ -222,18 +215,21 @@ const ForgotPasswordDialog = ({ open, onOpenChange, resetIdentifier, setResetIde
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="reset-identifier" className="text-sm font-medium">
-                Email ou téléphone
+                Téléphone
               </label>
-              <Input
-                id="reset-identifier"
-                placeholder="Ex : +221771234567 ou votre@email.com"
-                type="text"
-                value={resetIdentifier}
-                onChange={(e) => setResetIdentifier(e.target.value)}
-                disabled={isLoading}
+              <PhoneInput
+                form={phoneForm}
+                field={{
+                  name: "phoneNumber",
+                  value: phoneForm.watch("phoneNumber"),
+                  onChange: (value: string) => {
+                    phoneForm.setValue("phoneNumber", value);
+                    setResetIdentifier(value);
+                  },
+                }}
               />
               <p className="text-sm text-gray-500">
-                Nous vous enverrons un code pour réinitialiser votre mot de passe.
+                Nous vous enverrons un code par SMS pour réinitialiser votre mot de passe.
               </p>
             </div>
             <div className="flex justify-end space-x-2">

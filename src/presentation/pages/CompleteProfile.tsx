@@ -182,8 +182,12 @@ const CompleteProfile = () => {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('🔴 [COMPLETE_PROFILE] Error response:', response.status, errorData);
-        throw new Error(errorData.message || 'Failed to update profile');
+        const nested = errorData?.error?.message;
+        const message =
+          (typeof nested === "string" && nested) ||
+          (typeof errorData?.message === "string" && errorData.message) ||
+          "Impossible de mettre à jour votre profil.";
+        throw new Error(message);
       }
       
       const data = await response.json();
@@ -210,10 +214,9 @@ const CompleteProfile = () => {
       
       navigate(dashboardPathFor(values.role));
     } catch (error) {
-      console.error('🔴 [COMPLETE_PROFILE] Error updating profile:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour votre profil. Veuillez réessayer.",
+        title: "Profil non enregistré",
+        description: error instanceof Error ? error.message : "Impossible de mettre à jour votre profil.",
         variant: "destructive"
       });
     } finally {

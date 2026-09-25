@@ -30,7 +30,9 @@ export function PhoneVerificationGate() {
 
   useEffect(() => {
     if (!isReady || !isAuthenticated || !user) return;
-    if (user.role === "ADMIN" || user.googleId || user.phoneVerified) return;
+    const role = String(user.role || "").toUpperCase();
+    const staff = role === "ADMIN" || role === "SUPER_ADMIN" || role === "MODERATOR";
+    if (staff || user.googleId || user.phoneVerified) return;
     if (!isDashboardPath(location.pathname)) return;
     navigate("/verify-phone", { replace: true });
   }, [isReady, isAuthenticated, user, location.pathname, navigate]);

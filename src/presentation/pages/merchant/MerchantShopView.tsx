@@ -60,7 +60,7 @@ export function MerchantShopView({
         </div>
       </Panel>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Panel className="p-5">
           <p className="text-sm text-slate-500">Catégorie</p>
           <p className="mt-2 font-semibold">{shop.categorieShop?.name || "—"}</p>
@@ -71,6 +71,20 @@ export function MerchantShopView({
             Téléphone
           </p>
           <p className="mt-2 font-semibold">{shop.phoneNumber || "—"}</p>
+        </Panel>
+        <Panel className="p-5">
+          <p className="text-sm text-slate-500">Formule</p>
+          {shop.plan ? (
+            <>
+              <p className="mt-2 font-semibold">{shop.plan.name}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {(shop.products?.length ?? 0)} / {shop.plan.maxProducts} produits
+                {shop.planEndsAt ? ` · jusqu’au ${formatDateFr(shop.planEndsAt)}` : ""}
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 font-semibold">Sans limite</p>
+          )}
         </Panel>
         <Panel className="p-5">
           <p className="flex items-center gap-2 text-sm text-slate-500">

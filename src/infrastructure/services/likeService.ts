@@ -7,13 +7,20 @@ import { backendUrl, getAuthToken, getAuthHeaders } from './configService';
 import { unwrapPaged, unwrapRecord } from '../api/api-envelope';
 import { parseApiError } from '../api/fetch-error';
 
+/** Compteur de réactions : jamais négatif, jamais NaN. */
+export function nonNegativeCount(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.trunc(n);
+}
+
 function asToggleResponse(raw: unknown): ToggleLikeResponse {
   const data = unwrapRecord(raw);
   return {
     message: typeof data.message === 'string' ? data.message : 'Réaction mise à jour',
     action: typeof data.action === 'string' ? data.action : 'toggled',
-    likesCount: Number(data.likesCount ?? 0),
-    dislikesCount: Number(data.dislikesCount ?? 0),
+    likesCount: nonNegativeCount(data.likesCount),
+    dislikesCount: nonNegativeCount(data.dislikesCount),
   };
 }
 
@@ -219,8 +226,8 @@ export const getProductLikesCount = async (productId: number): Promise<LikesCoun
       : { items: [], pagination: { total: 0, page: 1, limit: 1, totalPages: 0 } };
 
     return {
-      likesCount: likesPage.pagination.total,
-      dislikesCount: dislikesPage.pagination.total,
+      likesCount: nonNegativeCount(likesPage.pagination.total),
+      dislikesCount: nonNegativeCount(dislikesPage.pagination.total),
     };
   } catch (error) {
     console.error('❌ [LIKES] Erreur lors de la récupération des compteurs:', error);

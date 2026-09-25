@@ -6,9 +6,8 @@ import {
   unwrapRecord,
 } from "../api/api-envelope";
 import { backendUrl, getAuthToken } from "./configService";
-import { logout } from "./authService";
 
-export type AdminRole = "ADMIN" | "MERCHANT" | "CLIENT" | "SUPPLIER";
+export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "MODERATOR" | "MERCHANT" | "CLIENT" | "SUPPLIER";
 export type ProductStatus = "DRAFT" | "PUBLISHED";
 export type OrderStatus = "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELED";
 export type PaymentMethod = "CASH_ON_DELIVERY" | "MOBILE_MONEY";
@@ -123,6 +122,7 @@ export type AdminProduct = {
   name: string;
   description?: string | null;
   price: number;
+  promoPrice?: number | null;
   stock: number;
   status: ProductStatus | string;
   shopId: number;
@@ -240,6 +240,7 @@ async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
   const response = await fetch(`${backendUrl}${path}`, {
     ...init,
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -248,9 +249,6 @@ async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      logout();
-    }
     throw await parseApiError(response, "Erreur administrateur");
   }
 
@@ -279,6 +277,22 @@ export async function getAdminUsers(query: AdminUsersQuery = {}) {
 export async function getAdminUser(id: number) {
   const payload = unwrapRecord(await adminRequest(`/admin/users/${id}`));
   return (payload.user ?? payload) as AdminUser;
+}
+
+export async function createAdminUser(body: {
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  role: string;
+}) {
+  return unwrapRecord(await adminRequest("/admin/users", {
+    method: "POST",
+    body: JSON.stringify(body),
+  })) as {
+    message?: string;
+    smsSent?: boolean;
+    temporaryPassword?: string;
+  };
 }
 
 export async function patchAdminUser(id: number, body: { role?: string; isVerified?: boolean }) {

@@ -29,6 +29,7 @@ import { markAllAsRead, type Conversation, type Message, type Partner } from "@/
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearConversationUnread } from "@infrastructure/realtime/cache";
+import { MessageBody, previewMessage } from "@/components/messages/MessageBody";
 
 export type InboxVariant = "merchant" | "admin" | "client";
 
@@ -699,7 +700,7 @@ export function MerchantMessagesView({
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2">
                       <p className={cn("truncate text-xs", ui.preview)}>
-                        {chat.lastMediaType ? "Pièce jointe" : chat.lastMessage || "—"}
+                        {chat.lastMediaType ? "Pièce jointe" : previewMessage(chat.lastMessage || "") || "—"}
                       </p>
                       {chat.unreadCount > 0 ? (
                         <span className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold", ui.unread)}>
@@ -727,10 +728,10 @@ export function MerchantMessagesView({
                 <button
                   type="button"
                   className={cn(
-                    "text-sm",
+                    "lg:hidden text-sm",
                     isClientInbox
                       ? "inline-flex items-center gap-1 rounded-full bg-bibocom-accent/10 px-3 py-1.5 font-medium text-bibocom-accent hover:bg-bibocom-accent/20"
-                      : cn("lg:hidden", ui.preview)
+                      : ui.preview
                   )}
                   onClick={() => setSelectedId(null)}
                 >
@@ -804,7 +805,7 @@ export function MerchantMessagesView({
                                 mine ? ui.bubbleMine : ui.bubbleOther
                               )}
                             >
-                              {message.content ? <p>{message.content}</p> : null}
+                              {message.content ? <MessageBody content={message.content} /> : null}
                               {message.mediaUrl ? (
                                 <MessageMedia url={message.mediaUrl} type={message.mediaType} />
                               ) : null}

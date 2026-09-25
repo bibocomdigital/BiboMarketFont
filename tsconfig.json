@@ -20,21 +20,20 @@
         "name": "next"
       }
     ],
-    "baseUrl": "./src",
     "paths": {
-      "@/*": ["./*"],
-      "@domain/*": ["./domain/*"],
-      "@application/*": ["./application/*"],
-      "@infrastructure/*": ["./infrastructure/*"],
-      "@presentation/*": ["./presentation/*"],
-      "@/components/*": ["./presentation/components/*"],
-      "@/hooks/*": ["./presentation/hooks/*"],
-      "@/lib/*": ["./presentation/lib/*"],
-      "@/pages/*": ["./presentation/pages/*"],
-      "@/types/*": ["./domain/types/*"],
-      "@/data/*": ["./presentation/data/*"],
-      "@/services/*": ["./infrastructure/services/*"],
-      "react-router-dom": ["./presentation/lib/react-router-compat.tsx"]
+      "@/*": ["./src/*"],
+      "@domain/*": ["./src/domain/*"],
+      "@application/*": ["./src/application/*"],
+      "@infrastructure/*": ["./src/infrastructure/*"],
+      "@presentation/*": ["./src/presentation/*"],
+      "@/components/*": ["./src/presentation/components/*"],
+      "@/hooks/*": ["./src/presentation/hooks/*"],
+      "@/lib/*": ["./src/presentation/lib/*"],
+      "@/pages/*": ["./src/presentation/pages/*"],
+      "@/types/*": ["./src/domain/types/*"],
+      "@/data/*": ["./src/presentation/data/*"],
+      "@/services/*": ["./src/infrastructure/services/*"],
+      "react-router-dom": ["./src/presentation/lib/react-router-compat.tsx"]
     }
   },
   "include": [

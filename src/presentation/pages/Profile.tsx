@@ -115,7 +115,7 @@ const Profile = () => {
       title: "Déconnexion réussie",
       description: "Vous avez été déconnecté avec succès.",
     });
-    navigate('/');
+    navigate("/", { replace: true });
   };
 
   const handleEdit = () => {

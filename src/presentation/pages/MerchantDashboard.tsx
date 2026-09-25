@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { User } from "lucide-react";
 import { getErrorStatus } from "@domain/errors/app-error";
-import { useAuthSession, dashboardPathFor } from "@/hooks/use-auth-session";
+import { useAuthSession, dashboardPathFor, hasStoredCredentials } from "@/hooks/use-auth-session";
 import { useMyShopQuery } from "@/hooks/queries/use-shops-query";
 import {
   useMerchantProductStatsQuery,
@@ -16,12 +16,14 @@ import { MerchantShell, type MerchantSection } from "./merchant/MerchantShell";
 import { MerchantOverview } from "./merchant/MerchantOverview";
 import { MerchantShopView } from "./merchant/MerchantShopView";
 import { MerchantProductsView } from "./merchant/MerchantProductsView";
+import { MerchantComptoirView } from "./merchant/MerchantComptoirView";
 import { MerchantOrdersView } from "./merchant/MerchantOrdersView";
 import { MerchantMessagesView } from "./merchant/MerchantMessagesView";
 import { MerchantProfileView } from "./merchant/MerchantProfileView";
+import { MerchantBadgeView } from "./merchant/MerchantBadgeView";
 import { isShopMissingError, Panel, queryErrorMessage } from "./merchant/ui";
 
-const SECTIONS: MerchantSection[] = ["dashboard", "boutique", "products", "orders", "messages", "profile"];
+const SECTIONS: MerchantSection[] = ["dashboard", "boutique", "products", "comptoir", "orders", "messages", "profile", "badge"];
 const SIDEBAR_KEY = "bibo.merchant.sidebarCollapsed";
 
 function isMerchantSection(value: string | null): value is MerchantSection {
@@ -67,6 +69,7 @@ const MerchantDashboard = () => {
   useEffect(() => {
     if (!isReady) return;
     if (!isAuthenticated) {
+      if (hasStoredCredentials()) return;
       navigate("/login", { replace: true });
       return;
     }
@@ -76,12 +79,35 @@ const MerchantDashboard = () => {
   }, [isReady, isAuthenticated, isMerchant, navigate, user?.role]);
 
   useEffect(() => {
-    const errors = [statsQuery.error, chartQuery.error, productStatsQuery.error, shopQuery.error];
-    if (errors.some((error) => getErrorStatus(error) === 401)) {
+    if (!isAuthenticated) return;
+    const queries = [statsQuery, chartQuery, productStatsQuery, shopQuery];
+    const failed = queries.some(
+      (query) =>
+        query.fetchStatus !== "fetching" &&
+        query.isFetched &&
+        getErrorStatus(query.error) === 401
+    );
+    if (failed) {
       logout();
       navigate("/login", { replace: true });
     }
-  }, [statsQuery.error, chartQuery.error, productStatsQuery.error, shopQuery.error, logout, navigate]);
+  }, [
+    isAuthenticated,
+    statsQuery.error,
+    statsQuery.fetchStatus,
+    statsQuery.isFetched,
+    chartQuery.error,
+    chartQuery.fetchStatus,
+    chartQuery.isFetched,
+    productStatsQuery.error,
+    productStatsQuery.fetchStatus,
+    productStatsQuery.isFetched,
+    shopQuery.error,
+    shopQuery.fetchStatus,
+    shopQuery.isFetched,
+    logout,
+    navigate,
+  ]);
 
   const displayName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
@@ -123,7 +149,7 @@ const MerchantDashboard = () => {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   const refreshShop = () => {
@@ -203,6 +229,15 @@ const MerchantDashboard = () => {
           onShopCreated={refreshShop}
         />
       )}
+      {section === "comptoir" && (
+        <MerchantComptoirView
+          merchantId={user?.id ?? null}
+          hasShop={hasShop}
+          enabled={enabled}
+          productId={Number(searchParams.get("product") || 0) || null}
+          onShopCreated={refreshShop}
+        />
+      )}
       {section === "orders" && (
         <MerchantOrdersView
           enabled={enabled}
@@ -223,6 +258,7 @@ const MerchantDashboard = () => {
       )}
       {section === "messages" && <MerchantMessagesView initialPartnerId={selectedPartnerId} />}
       {section === "profile" && <MerchantProfileView />}
+      {section === "badge" && <MerchantBadgeView />}
     </MerchantShell>
   );
 };

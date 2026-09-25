@@ -6,8 +6,10 @@ import {
   Store,
   Package,
   ShoppingBag,
+  Receipt,
   MessageSquare,
   User,
+  BadgeCheck,
   LogOut,
   ChevronLeft,
   Menu,
@@ -20,9 +22,11 @@ export type MerchantSection =
   | "dashboard"
   | "boutique"
   | "products"
+  | "comptoir"
   | "orders"
   | "messages"
-  | "profile";
+  | "profile"
+  | "badge";
 
 const NAV_ITEMS: Array<{
   id: MerchantSection;
@@ -32,18 +36,22 @@ const NAV_ITEMS: Array<{
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "boutique", label: "Boutique", icon: Store },
   { id: "products", label: "Produits", icon: Package },
+  { id: "comptoir", label: "Comptoir", icon: Receipt },
   { id: "orders", label: "Commandes", icon: ShoppingBag },
   { id: "messages", label: "Messages", icon: MessageSquare },
   { id: "profile", label: "Profil", icon: User },
+  { id: "badge", label: "Badge", icon: BadgeCheck },
 ];
 
 const TITLES: Record<MerchantSection, string> = {
   dashboard: "Dashboard boutique",
   boutique: "Ma boutique",
   products: "Mes produits",
+  comptoir: "Vente au comptoir",
   orders: "Commandes reçues",
   messages: "Messages",
   profile: "Mon profil",
+  badge: "Badge et stories",
 };
 
 const SUBTITLES: Partial<Record<MerchantSection, string>> = {

@@ -12,8 +12,6 @@ import {
   useVerifyPhoneMutation,
 } from "@/hooks/mutations/use-auth-mutations";
 import { getUserErrorMessage } from "@domain/errors/app-error";
-import { UserRole } from "@/types/user";
-
 function maskPhone(phone?: string): string {
   if (!phone) return "votre numéro";
   const digits = phone.replace(/[^0-9]/g, "");
@@ -44,7 +42,9 @@ const VerifyPhone = () => {
       navigate("/login", { replace: true });
       return;
     }
-    if (user?.role === UserRole.ADMIN || user?.googleId || user?.phoneVerified) {
+    const role = String(user?.role || "").toUpperCase();
+    const staff = role === "ADMIN" || role === "SUPER_ADMIN" || role === "MODERATOR";
+    if (staff || user?.googleId || user?.phoneVerified) {
       redirectToDashboard();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

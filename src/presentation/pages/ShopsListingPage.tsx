@@ -1,42 +1,157 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useShopsQuery } from '@/hooks/queries/use-shops-query';
-import { ServiceUnavailableState } from '@/components/feedback/ServiceUnavailableState';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useShopsQuery } from "@/hooks/queries/use-shops-query";
+import { useShopCategoriesQuery } from "@/hooks/queries/use-shop-categories-query";
+import { ServiceUnavailableState } from "@/components/feedback/ServiceUnavailableState";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { VoirPlusButton } from "@/components/ui/voir-plus-button";
+import { formatImageUrl, type Shop } from "@/services/shopService";
+import { cn } from "@/lib/utils";
 import {
   Search,
   Store,
   MapPin,
   Phone,
-  User,
-  ChevronLeft,
-  ChevronRight,
   Grid,
   List,
-  SlidersHorizontal,
-  X
-} from 'lucide-react';
+  X,
+  ChevronRight,
+} from "lucide-react";
 
-interface Shop {
-  id: number;
-  name: string;
-  description?: string;
-  address?: string;
-  phoneNumber?: string;
-  logo?: string;
-  createdAt?: string;
-  user?: {
-    firstName?: string;
-    lastName?: string;
-  };
+const PAGE_SIZE = 12;
+
+function merchantName(shop: Shop): string {
+  const person = shop.user ?? shop.owner;
+  return `${person?.firstName || ""} ${person?.lastName || ""}`.trim();
 }
 
-interface PaginationInfo {
-  currentPage: number;
-  totalPages: number;
-  totalItems: number;
-  itemsPerPage: number;
+function matchesShopQuery(shop: Shop, raw: string): boolean {
+  const term = raw.trim().toLowerCase();
+  if (!term) return true;
+  const person = shop.user ?? shop.owner;
+  const haystack = [shop.name, person?.firstName, person?.lastName, merchantName(shop)]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return term.split(/\s+/).every((word) => haystack.includes(word));
+}
+
+function ShopLogo({ shop, size }: { shop: Shop; size: "card" | "list" }) {
+  const logo = formatImageUrl(shop.logo);
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden bg-bibocom-light ring-1 ring-slate-100",
+        size === "card" ? "h-24 w-24 rounded-full" : "h-14 w-14 rounded-xl"
+      )}
+    >
+      {logo ? (
+        <img src={logo} alt="" className="h-full w-full object-contain" />
+      ) : (
+        <Store className={size === "card" ? "h-9 w-9 text-bibocom-primary/50" : "h-6 w-6 text-bibocom-primary/50"} />
+      )}
+    </div>
+  );
+}
+
+function ShopMeta({ shop, align }: { shop: Shop; align: "center" | "start" }) {
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500",
+        align === "center" ? "justify-center" : "justify-start"
+      )}
+    >
+      {shop.address ? (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <MapPin size={14} className="shrink-0 text-bibocom-accent" />
+          <span className="truncate">{shop.address}</span>
+        </span>
+      ) : null}
+      {shop.phoneNumber ? (
+        <a
+          href={`tel:${shop.phoneNumber}`}
+          onClick={(event) => event.stopPropagation()}
+          className="inline-flex items-center gap-1.5 hover:text-bibocom-accent"
+        >
+          <Phone size={14} className="shrink-0 text-bibocom-accent" />
+          {shop.phoneNumber}
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+function openOnKey(event: React.KeyboardEvent, onOpen: () => void) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    onOpen();
+  }
+}
+
+function ShopGridCard({ shop, onOpen }: { shop: Shop; onOpen: (id: number) => void }) {
+  const merchant = merchantName(shop);
+  return (
+    <article
+      role="link"
+      tabIndex={0}
+      onClick={() => onOpen(shop.id)}
+      onKeyDown={(event) => openOnKey(event, () => onOpen(shop.id))}
+      className="group flex h-full cursor-pointer flex-col items-center rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-bibocom-accent/40"
+    >
+      <ShopLogo shop={shop} size="card" />
+      <h2 className="mt-4 text-lg font-semibold text-bibocom-primary group-hover:text-bibocom-accent">
+        {shop.name}
+      </h2>
+      {merchant ? <p className="mt-1 text-sm text-slate-500">{merchant}</p> : null}
+      {shop.description ? (
+        <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600">{shop.description}</p>
+      ) : null}
+      <div className="mt-4">
+        <ShopMeta shop={shop} align="center" />
+      </div>
+      <span className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-bibocom-accent">
+        Voir la boutique
+        <ChevronRight size={16} />
+      </span>
+    </article>
+  );
+}
+
+function ShopListRow({ shop, onOpen }: { shop: Shop; onOpen: (id: number) => void }) {
+  const merchant = merchantName(shop);
+  return (
+    <article
+      role="link"
+      tabIndex={0}
+      onClick={() => onOpen(shop.id)}
+      onKeyDown={(event) => openOnKey(event, () => onOpen(shop.id))}
+      className="group flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-100 transition hover:shadow-md hover:ring-bibocom-accent/40"
+    >
+      <ShopLogo shop={shop} size="list" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <h2 className="truncate text-base font-semibold text-bibocom-primary group-hover:text-bibocom-accent">
+            {shop.name}
+          </h2>
+          {merchant ? <span className="truncate text-sm text-slate-500">{merchant}</span> : null}
+        </div>
+        {shop.description ? (
+          <p className="mt-1 line-clamp-1 text-sm text-slate-600">{shop.description}</p>
+        ) : null}
+        <div className="mt-2">
+          <ShopMeta shop={shop} align="start" />
+        </div>
+      </div>
+      <span className="hidden shrink-0 items-center gap-1 text-sm font-semibold text-bibocom-accent sm:inline-flex">
+        Voir
+        <ChevronRight size={16} />
+      </span>
+    </article>
+  );
 }
 
 const ShopsListingPage = () => {
@@ -44,32 +159,23 @@ const ShopsListingPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const { data: shopsData, isPending, isError, isFetching, refetch } = useShopsQuery();
+  const { data: categories = [] } = useShopCategoriesQuery();
   const shops = Array.isArray(shopsData) ? shopsData : [];
-  const [filteredShops, setFilteredShops] = useState<Shop[]>([]);
   const isLoading = isPending && shops.length === 0;
   const isUnavailable = isError && shops.length === 0;
 
-  // États de filtrage et pagination
-  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
-  const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [showFilters, setShowFilters] = useState(false);
+  const queryFromUrl = searchParams.get("q") ?? searchParams.get("search") ?? "";
+  const [searchTerm, setSearchTerm] = useState(queryFromUrl);
+  const writtenQuery = useRef(queryFromUrl.trim());
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  // Configuration pagination
-  const itemsPerPage = 20;
-
-  // États de filtres avancés
-  const [filters, setFilters] = useState({
-    sortBy: 'name',
-    sortOrder: 'asc' as 'asc' | 'desc',
-    hasProducts: 'all',
-  });
-
-  const categoryShopIdParam = searchParams.get('categorieShopId');
+  const categoryShopIdParam = searchParams.get("categorieShopId");
   const categoryShopId = categoryShopIdParam ? Number(categoryShopIdParam) : NaN;
+  const activeCategory = categories.find((category) => category.id === categoryShopId) ?? null;
 
-  // Filtrer et trier les boutiques
-  useEffect(() => {
+  const filteredShops = useMemo(() => {
     let filtered = [...shops];
 
     if (!Number.isNaN(categoryShopId)) {
@@ -83,308 +189,257 @@ const ShopsListingPage = () => {
       }
     }
 
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(shop =>
-        shop.name.toLowerCase().includes(term) ||
-        shop.description?.toLowerCase().includes(term) ||
-        shop.address?.toLowerCase().includes(term) ||
-        shop.user?.firstName?.toLowerCase().includes(term) ||
-        shop.user?.lastName?.toLowerCase().includes(term)
-      );
-    }
+    filtered = filtered.filter((shop) => matchesShopQuery(shop, searchTerm));
 
     filtered.sort((a, b) => {
-      let compareValue = 0;
-
-      switch (filters.sortBy) {
-        case 'name':
-          compareValue = a.name.localeCompare(b.name);
-          break;
-        case 'merchant':
-          const merchantA = `${a.user?.firstName || ''} ${a.user?.lastName || ''}`.trim();
-          const merchantB = `${b.user?.firstName || ''} ${b.user?.lastName || ''}`.trim();
-          compareValue = merchantA.localeCompare(merchantB);
-          break;
-        case 'date':
-          compareValue = new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
-          break;
-        default:
-          compareValue = 0;
-      }
-
-      return filters.sortOrder === 'desc' ? -compareValue : compareValue;
+      const compareValue = a.name.localeCompare(b.name, "fr");
+      return sortOrder === "desc" ? -compareValue : compareValue;
     });
 
-    setFilteredShops(filtered);
-  }, [shops, searchTerm, filters, categoryShopId]);
+    return filtered;
+  }, [shops, searchTerm, sortOrder, categoryShopId]);
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filters, categoryShopId]);
+    if (queryFromUrl.trim() === writtenQuery.current) return;
+    writtenQuery.current = queryFromUrl.trim();
+    setSearchTerm(queryFromUrl);
+  }, [queryFromUrl]);
 
-  // Mise à jour des URL params (sans recharger la page si l'URL n'a pas changé)
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (searchTerm) params.set('search', searchTerm);
-    if (currentPage > 1) params.set('page', currentPage.toString());
-    if (categoryShopIdParam) params.set('categorieShopId', categoryShopIdParam);
-    if (params.toString() === searchParams.toString()) return;
-    setSearchParams(params);
-  }, [searchTerm, currentPage, categoryShopIdParam, searchParams, setSearchParams]);
+    const next = searchTerm.trim();
+    if (next === writtenQuery.current && !searchParams.has("search")) return;
+    const handle = window.setTimeout(() => {
+      writtenQuery.current = next;
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        if ((params.get("q") ?? "") === next && !params.has("search")) return prev;
+        if (next) params.set("q", next);
+        else params.delete("q");
+        params.delete("search");
+        return params;
+      });
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [searchTerm, searchParams, setSearchParams]);
 
-  const paginationInfo: PaginationInfo = {
-    currentPage,
-    totalItems: filteredShops.length,
-    itemsPerPage,
-    totalPages: Math.ceil(filteredShops.length / itemsPerPage)
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchTerm, sortOrder, categoryShopId]);
+
+  const currentShops = filteredShops.slice(0, visibleCount);
+  const remainingShops = Math.max(0, filteredShops.length - currentShops.length);
+  const filtersActive =
+    searchTerm.trim().length > 0 || sortOrder !== "asc" || activeCategory !== null;
+
+  const selectCategory = (id: number | null) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (id == null) params.delete("categorieShopId");
+      else params.set("categorieShopId", String(id));
+      return params;
+    });
   };
 
-  const currentShops = filteredShops.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSortOrder("asc");
+    setVisibleCount(PAGE_SIZE);
+    selectCategory(null);
+  };
+
+  const title = activeCategory ? activeCategory.name : "Toutes nos boutiques";
+  const countLabel = `${filteredShops.length} boutique${filteredShops.length !== 1 ? "s" : ""}`;
+
+  const shell = (content: React.ReactNode) => (
+    <div className="flex min-h-screen flex-col bg-bibocom-light">
+      <Header />
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16 pt-24 sm:px-6 md:pt-28 lg:px-10">
+        {content}
+      </main>
+      <Footer />
+    </div>
   );
 
-  const handleSearch = (value: string) => {
-    setSearchTerm(value);
-    setCurrentPage(1);
-  };
-
-  const handlePageChange = (page: number) => {
-    if (page >= 1 && page <= paginationInfo.totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const handleShopClick = (shopId: number) => {
-    navigate(`/boutique/${shopId}`);
-  };
-
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxVisible = 5;
-    const start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-    const end = Math.min(paginationInfo.totalPages, start + maxVisible - 1);
-    for (let i = start; i <= end; i++) pages.push(i);
-    return pages;
-  };
-
-  if (isLoading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500 mx-auto mb-4"></div>
-        <p className="text-gray-600">Chargement des boutiques...</p>
+  if (isLoading) {
+    return shell(
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-bibocom-accent" />
+          <p className="text-bibocom-primary/70">Chargement des boutiques...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  if (isUnavailable) return (
-    <div className="flex min-h-screen items-center justify-center bg-white">
-      <ServiceUnavailableState
-        title="Boutiques temporairement indisponibles"
-        description="Nous n'arrivons pas à afficher les commerçants pour le moment. Le serveur est injoignable — réessayez dans un instant."
-        onRetry={() => {
-          void refetch();
-        }}
-        isRetrying={isFetching}
-      />
-    </div>
-  );
+  if (isUnavailable) {
+    return shell(
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <ServiceUnavailableState
+          title="Boutiques temporairement indisponibles"
+          description="Nous n'arrivons pas à afficher les commerçants pour le moment. Le serveur est injoignable — réessayez dans un instant."
+          onRetry={() => {
+            void refetch();
+          }}
+          isRetrying={isFetching}
+        />
+      </div>
+    );
+  }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Toutes nos boutiques</h1>
-            <p className="text-gray-600 mt-1">
-              Découvrez {filteredShops.length} boutique{filteredShops.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded ${viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-              >
-                <Grid size={16} />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded ${viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-              >
-                <List size={16} />
-              </button>
-            </div>
+  return shell(
+    <>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-bibocom-accent">Boutiques</p>
+          <h1 className="mt-1 text-3xl font-bold text-bibocom-primary">{title}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {countLabel}
+            {searchTerm ? ` pour « ${searchTerm} »` : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl bg-white p-1 ring-1 ring-slate-200">
             <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              type="button"
+              onClick={() => setViewMode("grid")}
+              aria-label="Affichage en grille"
+              aria-pressed={viewMode === "grid"}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium",
+                viewMode === "grid" ? "bg-bibocom-primary text-white" : "text-slate-500 hover:text-bibocom-primary"
+              )}
             >
-              <SlidersHorizontal size={16} /> Filtres
+              <Grid size={16} />
+              Cartes
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              aria-label="Affichage en liste"
+              aria-pressed={viewMode === "list"}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium",
+                viewMode === "list" ? "bg-bibocom-primary text-white" : "text-slate-500 hover:text-bibocom-primary"
+              )}
+            >
+              <List size={16} />
+              Liste
             </button>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
-        {/* Sidebar filtres */}
-        <div className={`lg:w-80 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-          <div className="bg-white rounded-xl shadow-sm p-6 sticky top-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Filtres</h3>
-              <button onClick={() => setShowFilters(false)} className="lg:hidden text-gray-500 hover:text-gray-700">
-                <X size={20} />
-              </button>
-            </div>
-            {/* Recherche */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Nom, marchand, adresse..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            {/* Tri */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Trier par</label>
-              <select
-                value={filters.sortBy}
-                onChange={(e) => setFilters(prev => ({ ...prev, sortBy: e.target.value }))}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              >
-                <option value="name">Nom de boutique</option>
-                <option value="merchant">Nom du marchand</option>
-                <option value="date">Date de création</option>
-              </select>
-            </div>
-            {/* Ordre */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Ordre</label>
-              <select
-                value={filters.sortOrder}
-                onChange={(e) => setFilters(prev => ({ ...prev, sortOrder: e.target.value as 'asc' | 'desc' }))}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              >
-                <option value="asc">Croissant (A-Z)</option>
-                <option value="desc">Décroissant (Z-A)</option>
-              </select>
-            </div>
+      <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Nom de la boutique ou du marchand"
+            aria-label="Rechercher par nom de boutique ou de marchand"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-sm text-bibocom-primary outline-none ring-bibocom-accent/30 placeholder:text-slate-400 focus:ring-2"
+          />
+          {searchTerm ? (
             <button
-              onClick={() => { setSearchTerm(''); setFilters({ sortBy: 'name', sortOrder: 'asc', hasProducts: 'all' }); setCurrentPage(1); }}
-              className="w-full px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              type="button"
+              onClick={() => setSearchTerm("")}
+              aria-label="Effacer la recherche"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-bibocom-primary"
             >
+              <X size={16} />
+            </button>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <select
+            value={sortOrder}
+            onChange={(event) => setSortOrder(event.target.value as "asc" | "desc")}
+            aria-label="Ordre"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-bibocom-primary outline-none focus:ring-2 focus:ring-bibocom-accent/30"
+          >
+            <option value="asc">Croissant (A-Z)</option>
+            <option value="desc">Décroissant (Z-A)</option>
+          </select>
+          {filtersActive ? (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              <X size={14} />
               Réinitialiser
             </button>
-          </div>
-        </div>
-
-        {/* Contenu principal */}
-        <div className="flex-1">
-          <div className="mb-6">
-            <p className="text-gray-600">
-              {filteredShops.length} résultat{filteredShops.length !== 1 ? 's' : ''}{searchTerm && ` pour "${searchTerm}"`}
-            </p>
-          </div>
-
-          {/* Affichage boutiques */}
-          {currentShops.length === 0 ? (
-            <div className="text-center py-12">
-              <Store className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune boutique trouvée</h3>
-              <p className="text-gray-600">Essayez de modifier vos critères de recherche.</p>
-            </div>
-          ) : (
-            <>
-              {/* Grille */}
-              {viewMode === 'grid' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-                  {currentShops.map((shop) => (
-                    <div
-                      key={shop.id}
-                      onClick={() => handleShopClick(shop.id)}
-                      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer group p-6"
-                    >
-                      <div className="flex items-center justify-center mb-4">
-                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-gray-200 group-hover:scale-105 transition-transform">
-                          {shop.logo ? (
-                            <img src={shop.logo.includes('http') ? shop.logo : `${shop.logo}`} alt={shop.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                              <Store className="w-8 h-8 text-gray-400" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-orange-600 transition-colors">{shop.name}</h3>
-                        {shop.user && <div className="flex items-center justify-center text-sm text-gray-600 mb-2"><User size={14} className="mr-1" />{shop.user.firstName} {shop.user.lastName}</div>}
-                        {shop.description && <p className="text-sm text-gray-600 mb-3 line-clamp-2">{shop.description}</p>}
-                        {shop.address && <div className="flex items-center justify-center text-sm text-gray-500 mb-2"><MapPin size={14} className="mr-1" />{shop.address}</div>}
-                        {shop.phoneNumber && <div className="flex items-center justify-center text-sm text-gray-500"><Phone size={14} className="mr-1" />{shop.phoneNumber}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Liste */}
-              {viewMode === 'list' && (
-                <div className="flex flex-col gap-4 mb-8">
-                  {currentShops.map((shop) => (
-                    <div
-                      key={shop.id}
-                      onClick={() => handleShopClick(shop.id)}
-                      className="flex items-center bg-white rounded-xl shadow-sm hover:shadow-md cursor-pointer p-4 gap-4"
-                    >
-                      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-gray-200 flex-shrink-0">
-                        {shop.logo ? (
-                          <img src={shop.logo.includes('http') ? shop.logo : `${shop.logo}`} alt={shop.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                            <Store className="w-8 h-8 text-gray-400" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-orange-600 transition-colors">{shop.name}</h3>
-                        {shop.user && <div className="flex items-center text-sm text-gray-600 mb-1"><User size={14} className="mr-1" />{shop.user.firstName} {shop.user.lastName}</div>}
-                        {shop.description && <p className="text-sm text-gray-600 mb-1 line-clamp-2">{shop.description}</p>}
-                        {shop.address && <div className="flex items-center text-sm text-gray-500 mb-1"><MapPin size={14} className="mr-1" />{shop.address}</div>}
-                        {shop.phoneNumber && <div className="flex items-center text-sm text-gray-500"><Phone size={14} className="mr-1" />{shop.phoneNumber}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Pagination */}
-              {paginationInfo.totalPages > 1 && (
-                <div className="flex items-center justify-between bg-white rounded-xl shadow-sm p-4">
-                  <div className="text-sm text-gray-600">
-                    Affichage de {(currentPage - 1) * itemsPerPage + 1} à {Math.min(currentPage * itemsPerPage, paginationInfo.totalItems)} sur {paginationInfo.totalItems} boutiques
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft size={16} /></button>
-                    {getPageNumbers().map((page) => (
-                      <button key={page} onClick={() => handlePageChange(page)} className={`px-3 py-2 rounded-lg ${page === currentPage ? 'bg-orange-500 text-white' : 'border border-gray-300 hover:bg-gray-50'}`}>{page}</button>
-                    ))}
-                    <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === paginationInfo.totalPages} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronRight size={16} /></button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          ) : null}
         </div>
       </div>
-    </div>
+
+      {categories.length > 0 ? (
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => selectCategory(null)}
+            className={cn(
+              "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium",
+              activeCategory
+                ? "bg-white text-slate-600 ring-1 ring-slate-200 hover:text-bibocom-primary"
+                : "bg-bibocom-primary text-white"
+            )}
+          >
+            Toutes
+          </button>
+          {categories.map((category) => {
+            const selected = category.id === categoryShopId;
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => selectCategory(selected ? null : category.id)}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium",
+                  selected
+                    ? "bg-bibocom-primary text-white"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:text-bibocom-primary"
+                )}
+              >
+                {category.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="mt-6">
+        {currentShops.length === 0 ? (
+          <div className="rounded-2xl bg-white px-6 py-16 text-center ring-1 ring-slate-100">
+            <Store className="mx-auto mb-4 h-12 w-12 text-slate-300" />
+            <h2 className="text-lg font-semibold text-bibocom-primary">Aucune boutique trouvée</h2>
+            <p className="mt-1 text-sm text-slate-500">Essayez de modifier vos critères de recherche.</p>
+          </div>
+        ) : (
+          <>
+            {viewMode === "grid" ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {currentShops.map((shop) => (
+                  <ShopGridCard key={shop.id} shop={shop} onOpen={(id) => navigate(`/boutique/${id}`)} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {currentShops.map((shop) => (
+                  <ShopListRow key={shop.id} shop={shop} onOpen={(id) => navigate(`/boutique/${id}`)} />
+                ))}
+              </div>
+            )}
+            <VoirPlusButton
+              remaining={remainingShops}
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+              noun="boutique"
+            />
+          </>
+        )}
+      </div>
+    </>
   );
 };
 

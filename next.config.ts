@@ -5,6 +5,12 @@ const apiUrl = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http:/
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  transpilePackages: [
+    "socket.io-client",
+    "engine.io-client",
+    "@socket.io/component-emitter",
+    "@react-oauth/google",
+  ],
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -15,6 +21,14 @@ const nextConfig: NextConfig = {
       { protocol: "http", hostname: "127.0.0.1" },
     ],
     unoptimized: true,
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+    ];
   },
   async rewrites() {
     return [
@@ -35,6 +49,8 @@ const nextConfig: NextConfig = {
     root: __dirname,
     resolveAlias: {
       "react-router-dom": "./src/presentation/lib/react-router-compat.tsx",
+      "@socket.io/component-emitter":
+        "./node_modules/@socket.io/component-emitter/lib/esm/index.js",
     },
   },
 };

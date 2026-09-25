@@ -22,11 +22,13 @@ const WhatsAppLinksPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
+  // Ancien flux WhatsApp : on ouvre désormais la messagerie interne.
+  useEffect(() => {
+    navigate('/client-dashboard?view=messages', { replace: true });
+  }, [navigate]);
+
   // Récupérer les liens depuis l'état de navigation
   const { links = [] } = location.state || {};
-  
-  // Log pour débogage
-  console.log("Données de liens reçues:", links);
 
   // Fonction pour retourner à la page précédente
   const goBack = (event) => {
@@ -124,6 +126,12 @@ const WhatsAppLinksPage = () => {
       }
     }
   };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 text-sm text-gray-500">
+      Redirection vers la messagerie...
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white py-8">

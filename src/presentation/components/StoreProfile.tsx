@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { ProductPrice } from '@/components/product/ProductPrice';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Loader, 
@@ -25,6 +26,7 @@ import {
 
 // Import des services
 import { contactMerchant, respondToMessage } from '@/services/shopService';
+import { formatImageUrl } from '@/services/productService';
 import { getUserErrorMessage } from '@domain/errors/app-error';
 import { useShopMerchantQuery, useShopProductsQuery, useShopQuery } from '@/hooks/queries/use-shops-query';
 import { useAddToCartMutation } from '@/hooks/mutations/use-cart-mutations';
@@ -65,17 +67,19 @@ const ShopProfile = () => {
   const [responseSuccess, setResponseSuccess] = useState(false);
   const [responseError, setResponseError] = useState(null);
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-
   // Déterminer la page précédente ou la page de retour appropriée
   const handleGoBack = () => {
-    // Si on a un state avec une URL de retour dans la navigation, l'utiliser
-    if (location.state && location.state.from) {
+    if (location.state?.from) {
       navigate(location.state.from);
-    } else {
-      // Sinon, essayer de revenir en arrière dans l'historique de navigation
-      navigate(-1);
+      return;
     }
+    const referrer = typeof document !== "undefined" ? document.referrer : "";
+    const sameSite = referrer.startsWith(window.location.origin);
+    if (sameSite && window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/boutiques");
   };
 
   const handleOpenResponseForm = (contactId) => {
@@ -124,30 +128,21 @@ const ShopProfile = () => {
     });
   };
   
-  // Helper function to handle image URLs
   const getImageUrl = (product, imageIndex = 0) => {
     if (!product.images || !product.images.length || imageIndex >= product.images.length) {
       return null;
     }
-
     const imageInfo = product.images[imageIndex];
-    let imageUrl = '';
+    const imageUrl = typeof imageInfo === 'string'
+      ? imageInfo
+      : (imageInfo?.url || imageInfo?.imageUrl || imageInfo?.path || '');
+    return formatImageUrl(imageUrl || null);
+  };
 
-    // Check different possible structures
-    if (typeof imageInfo === 'string') {
-      imageUrl = imageInfo;
-    } else if (imageInfo && typeof imageInfo === 'object') {
-      // IMPORTANT: Remove the leading slash from imageUrl
-      imageUrl = (imageInfo.url || imageInfo.imageUrl || imageInfo.path || '').replace(/^\/uploads\//, '');
-    }
-
-    if (!imageUrl) {
-      return null;
-    }
-    
-    // Create full URL without double slashes
-    const fullUrl = `${backendUrl}/uploads/${imageUrl}`;
-    return fullUrl;
+  const formatPrice = (price) => {
+    const n = Number(price);
+    if (!Number.isFinite(n)) return '—';
+    return `${Math.round(n).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ')} FCFA`;
   };
   
   // Handle image loading error
@@ -257,121 +252,81 @@ const ShopProfile = () => {
     );
   }
   
+  const shopLogo = formatImageUrl(shop.logo || null);
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Bouton de retour */}
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
       <button 
+        type="button"
         onClick={handleGoBack} 
-        className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6"
+        className="mb-4 inline-flex items-center gap-1 rounded-full bg-bibocom-accent/10 px-3 py-1.5 text-sm font-medium text-bibocom-accent hover:bg-bibocom-accent/20"
       >
-        <ArrowLeft size={20} className="mr-2" />
+        <ArrowLeft size={16} />
         Retour
       </button>
       
-      {/* Layout principal avec deux colonnes */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Colonne principale */}
-        <div className="lg:w-2/3">
-          {/* En-tête de la boutique */}
-          <div className="bg-white shadow-sm rounded-lg overflow-hidden mb-8">
-            {/* Bannière/Image de couverture */}
-            <div className="h-48 bg-gradient-to-r from-purple-500 to-pink-500 relative">
-              {shop.logo ? (
-                <img 
-                  src={`${backendUrl}/${shop.logo.replace(/^\//, '')}`} 
-                  alt={`Bannière de ${shop.name}`}
-                  className="w-full h-full object-cover"
-                  onError={handleImageError}
-                />
-              ) : null}
-              
-              {/* Photo de profil */}
-              <div className="absolute bottom-0 left-8 transform translate-y-1/2">
-                <div className="w-24 h-24 rounded-full border-4 border-white bg-white overflow-hidden shadow-lg">
-                  {shop.logo ? (
-                    <img 
-                      src={`${backendUrl}/${shop.logo.replace(/^\//, '')}`}
-                      alt={shop.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2264%22%20height%3D%2264%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20fill%3D%22%23E0E0E0%22%20width%3D%2264%22%20height%3D%2264%22%2F%3E%3Ctext%20fill%3D%22%23757575%22%20font-family%3D%22Arial%22%20font-size%3D%2224%22%20text-anchor%3D%22middle%22%20x%3D%2232%22%20y%3D%2236%22%3E%3F%3C%2Ftext%3E%3C%2Fsvg%3E';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-purple-600 flex items-center justify-center text-white font-bold text-2xl">
-                      {shop.name?.charAt(0)?.toUpperCase() || 'B'}
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1">
+          <div className="mb-6 overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div className="h-24 bg-gradient-to-r from-orange-400 to-orange-500 sm:h-32" />
+            <div className="px-4 pb-4 sm:px-6">
+              <div className="-mt-8 flex flex-col gap-4 sm:-mt-10 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex min-w-0 items-end gap-3">
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border-4 border-white bg-orange-100 shadow sm:h-20 sm:w-20">
+                    {shopLogo ? (
+                      <img src={shopLogo} alt={shop.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xl font-bold text-orange-600">
+                        {shop.name?.charAt(0)?.toUpperCase() || 'B'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 pb-1">
+                    <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{shop.name}</h1>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 sm:text-sm">
+                      {shop.address && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin size={14} className="text-gray-400" />
+                          {shop.address}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar size={14} className="text-gray-400" />
+                        Depuis {formatDate(shop.createdAt)}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <ShoppingBag size={14} className="text-gray-400" />
+                        {products.length} produit{products.length > 1 ? 's' : ''}
+                      </span>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            {/* Informations de la boutique */}
-            <div className="pt-16 pb-6 px-8">
-              <h1 className="text-2xl font-bold text-gray-800">
-                {shop.name}
-              </h1>
-              
-              <div className="flex flex-wrap items-center mt-2 text-gray-600 text-sm">
-                {shop.address && (
-                  <div className="flex items-center mr-6 mb-2">
-                    <MapPin size={16} className="mr-1 text-gray-400" />
-                    <span>{shop.address}</span>
-                  </div>
-                )}
-                
-                {shop.phoneNumber && (
-                  <div className="flex items-center mr-6 mb-2">
-                    <Phone size={16} className="mr-1 text-gray-400" />
-                    <span>{shop.phoneNumber}</span>
-                  </div>
-                )}
-                
-                {shop.email && (
-                  <div className="flex items-center mr-6 mb-2">
-                    <Mail size={16} className="mr-1 text-gray-400" />
-                    <span>{shop.email}</span>
-                  </div>
-                )}
-                
-                <div className="flex items-center mr-6 mb-2">
-                  <Calendar size={16} className="mr-1 text-gray-400" />
-                  <span>Membre depuis {formatDate(shop.createdAt)}</span>
-                </div>
-                
-                <div className="flex items-center mr-6 mb-2">
-                  <ShoppingCart size={16} className="mr-1 text-gray-400" />
-                  <span>{products.length} produits</span>
-                </div>
-              </div>
-              
               {shop.description && (
-                <p className="mt-4 text-gray-600">{shop.description}</p>
+                <p className="mt-3 line-clamp-3 text-sm text-gray-600">{shop.description}</p>
+              )}
+              {merchantDetails && (
+                <div className="mt-4 lg:hidden">
+                  <MerchantProfileView merchant={merchantDetails} onClose={() => {}} compact />
+                </div>
               )}
             </div>
             
-            {/* Navigation des onglets */}
-            <div className="border-t border-gray-200">
-              <div className="flex">
-                <button 
-                  className={`px-6 py-3 text-sm font-medium ${currentTab === 'products' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
-                  onClick={() => setCurrentTab('products')}
+            <div className="flex border-t border-gray-100">
+              {['products', 'about', 'contact'].map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`flex-1 px-3 py-3 text-sm font-medium sm:flex-none sm:px-6 ${
+                    currentTab === tab
+                      ? 'border-b-2 border-orange-500 text-orange-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  onClick={() => setCurrentTab(tab)}
                 >
-                  Produits
+                  {tab === 'products' ? 'Produits' : tab === 'about' ? 'À propos' : 'Contact'}
                 </button>
-                <button 
-                  className={`px-6 py-3 text-sm font-medium ${currentTab === 'about' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
-                  onClick={() => setCurrentTab('about')}
-                >
-                  À propos
-                </button>
-                <button 
-                  className={`px-6 py-3 text-sm font-medium ${currentTab === 'contact' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
-                  onClick={() => setCurrentTab('contact')}
-                >
-                  Contact
-                </button>
-              </div>
+              ))}
             </div>
           </div>
           
@@ -380,65 +335,64 @@ const ShopProfile = () => {
             <div>
               <h2 className="text-xl font-semibold mb-4">Produits de {shop.name}</h2>
               
-              {/* Grille de produits */}
               {products.length === 0 ? (
-                <div className="bg-gray-50 p-6 rounded-lg text-center">
-                  <p className="text-gray-500">Aucun produit disponible pour le moment</p>
+                <div className="rounded-xl bg-gray-50 p-8 text-center text-sm text-gray-500">
+                  Aucun produit disponible pour le moment
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-6">
-                  {products.map((product) => (
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  {products.map((product) => {
+                    const imageUrl = getImageUrl(product);
+                    return (
                     <div 
                       key={`product-${product.id}`} 
-                      className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden cursor-pointer"
+                      className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md cursor-pointer"
                       onClick={() => setPreviewProduct(product)}
                     >
-                      {/* Image du produit */}
-                      <div className="relative h-48 overflow-hidden bg-gray-100">
-                        {product.images && product.images.length > 0 ? (
+                      <div className="relative aspect-[4/3] bg-gray-100">
+                        {imageUrl ? (
                           <img
-                            src={getImageUrl(product)}
+                            src={imageUrl}
                             alt={product.name}
-                            className="w-full h-full object-cover transition-opacity duration-500"
+                            className="h-full w-full object-cover"
                             onError={handleImageError}
                           />
                         ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <span className="text-gray-400">Image non disponible</span>
+                          <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                            Pas d’image
                           </div>
                         )}
-                        
-                        {/* Bouton Ajouter au Panier */}
                         <button
-                          className="absolute bottom-2 right-2 bg-orange-500 hover:bg-orange-600 text-white p-2 rounded-full shadow-md transition-colors z-10"
+                          className="absolute bottom-2 right-2 z-10 rounded-full bg-orange-500 p-2 text-white shadow-md hover:bg-orange-600"
                           onClick={(e) => handleAddToCart(product, e)}
                           title="Ajouter au panier"
+                          type="button"
                         >
-                          <ShoppingCart size={18} />
+                          <ShoppingCart size={16} />
                         </button>
                       </div>
-                      
-                      {/* Détails du produit */}
-                      <div className="p-4">
-                        <h3 className="font-medium text-gray-800 mb-2">{product.name}</h3>
-                        <p className="text-gray-500 mb-3 text-sm line-clamp-2">{product.description}</p>
-                        <div className="flex justify-between items-center">
-                          <div className="text-lg font-bold text-gray-900">{product.price} FCFA</div>
-                          <div className="flex items-center space-x-3">
-                            <div className="flex items-center">
-                              <Heart size={18} className="text-gray-500 mr-1" />
-                              <span className="text-xs text-gray-500">{product.likesCount || 0}</span>
-                            </div>
-                            
-                            <div className="flex items-center">
-                              <MessageCircle size={18} className="text-gray-500 mr-1" />
-                              <span className="text-xs text-gray-500">{product.commentsCount || 0}</span>
-                            </div>
+                      <div className="p-3">
+                        <h3 className="line-clamp-2 text-sm font-medium text-gray-800">{product.name}</h3>
+                        {product.description && product.description !== product.name && (
+                          <p className="mt-1 line-clamp-2 text-xs text-gray-500">{product.description}</p>
+                        )}
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <ProductPrice price={product.price} promoPrice={product.promoPrice} size="sm" />
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                            <span className="inline-flex items-center gap-0.5">
+                              <Heart size={13} />
+                              {Math.max(0, Number(product.likesCount) || 0)}
+                            </span>
+                            <span className="inline-flex items-center gap-0.5">
+                              <MessageCircle size={13} />
+                              {product.commentsCount || 0}
+                            </span>
                           </div>
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -619,15 +573,13 @@ const ShopProfile = () => {
           )}
         </div>
         
-        {/* Colonne latérale avec les informations du commerçant */}
-        <div className="lg:w-1/3">
-  {merchantDetails && (
-    <MerchantProfileView
-      merchant={merchantDetails} 
-      onClose={() => {}} 
-    />
-  )}
-</div>
+        {merchantDetails && (
+          <aside className="hidden w-full shrink-0 lg:block lg:w-80">
+            <div className="sticky top-24 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <MerchantProfileView merchant={merchantDetails} onClose={() => {}} />
+            </div>
+          </aside>
+        )}
       </div>
       {previewProduct && (
         <ProductDetailModal

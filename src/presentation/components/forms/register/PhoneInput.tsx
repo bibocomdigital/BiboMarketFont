@@ -17,6 +17,15 @@ interface PhoneInputProps {
   className?: string;
 }
 
+function splitStoredPhone(value: string): { country: Country; local: string } | null {
+  const trimmed = value.replace(/\s/g, "");
+  const country = countries
+    .filter((item) => trimmed.startsWith(item.dialCode))
+    .sort((a, b) => b.dialCode.length - a.dialCode.length)[0];
+  if (!country) return null;
+  return { country, local: trimmed.slice(country.dialCode.length).replace(/\D/g, "") };
+}
+
 const PhoneInput = ({ 
   form, 
   field, 
@@ -24,9 +33,10 @@ const PhoneInput = ({
   onCountryChange,
   className,
 }: PhoneInputProps) => {
-  const [phoneWithoutCode, setPhoneWithoutCode] = useState('');
+  const initial = field?.value ? splitStoredPhone(String(field.value)) : null;
+  const [phoneWithoutCode, setPhoneWithoutCode] = useState(initial?.local ?? "");
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
-  const [currentCountry, setCurrentCountry] = useState<Country>(selectedCountry);
+  const [currentCountry, setCurrentCountry] = useState<Country>(initial?.country ?? selectedCountry);
 
   // Update when selectedCountry prop changes
   useEffect(() => {
@@ -37,23 +47,19 @@ const PhoneInput = ({
 
   // Initialize phone number from field value if it exists
   useEffect(() => {
-    if (field?.value && String(field.value).includes('+')) {
-      // Extraire le code pays et le numéro si une valeur existe déjà
-      const dialCode = field.value.match(/^\+\d+/)?.[0];
-      const country = countries.find(c => c.dialCode === dialCode);
-      if (country) {
-        setCurrentCountry(country);
-        const phoneNumber = field.value.replace(dialCode, '').trim();
-        setPhoneWithoutCode(phoneNumber);
-      }
-    }
-  }, [field.value]);
+    if (!field?.value || !String(field.value).includes("+")) return;
+    const split = splitStoredPhone(String(field.value));
+    if (!split) return;
+    setCurrentCountry(split.country);
+    setPhoneWithoutCode(split.local);
+  }, [field?.value]);
 
   // Update when country changes
   useEffect(() => {
-    if (currentCountry) {
-      updateFullPhoneNumber(phoneWithoutCode);
-    }
+    if (!currentCountry) return;
+    const stored = String(field?.value ?? "");
+    if (!phoneWithoutCode && stored.length > currentCountry.dialCode.length) return;
+    updateFullPhoneNumber(phoneWithoutCode);
   }, [currentCountry]);
 
   const updateFullPhoneNumber = (phoneNumber: string) => {

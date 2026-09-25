@@ -54,6 +54,9 @@ const formSchema = z
     role: z.nativeEnum(UserRole, {
       required_error: "Veuillez sélectionner un rôle",
     }),
+    city: z.string().trim().optional(),
+    department: z.string().trim().optional(),
+    commune: z.string().trim().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Les mots de passe ne correspondent pas",
@@ -91,6 +94,9 @@ const RegisterForm = ({
       password: "",
       confirmPassword: "",
       role: initialRole,
+      city: "",
+      department: "",
+      commune: "",
     },
   });
 
@@ -218,7 +224,12 @@ Object.entries(parsedData).forEach(([key, value]) => {
           phoneNumber: data.phoneNumber,
           password: data.password,
         });
-        if (session.user.role !== UserRole.ADMIN) {
+        if (!session.user) {
+          navigate("/login");
+          return;
+        }
+        const staff = ["ADMIN", "SUPER_ADMIN", "MODERATOR"].includes(String(session.user.role));
+        if (!staff) {
           navigate("/verify-phone");
         } else {
           navigate(dashboardPathFor(session.user.role));

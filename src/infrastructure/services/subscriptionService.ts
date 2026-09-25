@@ -4,7 +4,7 @@
 
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
-import { unwrapPaged } from '../api/api-envelope';
+import { unwrapPaged, unwrapRecord } from '../api/api-envelope';
 import { parseApiError } from '../api/fetch-error';
 
 // Types pour les abonnements
@@ -58,34 +58,28 @@ export interface SuggestedUsersResponse {
  * @returns {Promise<FollowResponse>} La réponse avec les informations sur l'action effectuée
  */
 export const toggleFollow = async (userId: number): Promise<FollowResponse> => {
-  try {
-    console.log(`🔄 [SUBSCRIPTION] Basculement du suivi pour l'utilisateur ID ${userId}`);
-    
-    // Récupérer le token d'authentification
-    const token = getAuthToken();
-    if (!token) {
-      throw new Error('Vous devez être connecté pour suivre ou ne plus suivre un utilisateur');
-    }
-    
-    // Appeler l'API pour basculer le suivi
-    const response = await fetch(`${backendUrl}/users/${userId}/toggle-follow`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      return handleApiError(errorData, 'Erreur lors du basculement du suivi');
-    }
-    
-    const data = await response.json();
-    console.log(`✅ [SUBSCRIPTION] Suivi basculé avec succès: ${data.action}`);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ [SUBSCRIPTION] Erreur:', error);
-    throw error;
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Vous devez être connecté pour suivre un utilisateur');
   }
+
+  const response = await fetch(`${backendUrl}/users/${userId}/toggle-follow`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, 'Impossible de mettre à jour l’abonnement');
+  }
+
+  const payload = unwrapRecord(await response.json());
+  const action = payload.action === 'unfollowed' ? 'unfollowed' : 'followed';
+  return {
+    message: String(payload.message ?? (action === 'followed' ? 'Vous suivez maintenant cet utilisateur' : 'Vous ne suivez plus cet utilisateur')),
+    action,
+    followerCount: Number(payload.followerCount ?? 0),
+    userToFollow: (payload.userToFollow ?? {}) as User,
+  };
 };
 
 /**
@@ -176,33 +170,21 @@ export const getUserFollowing = async (
  * @returns {Promise<IsFollowingResponse>} Le résultat de la vérification
  */
 export const checkIfFollowing = async (userId: number): Promise<IsFollowingResponse> => {
-  try {
-    console.log(`🔄 [SUBSCRIPTION] Vérification si l'utilisateur suit l'ID ${userId}`);
-    
-    // Récupérer le token d'authentification
-    const token = getAuthToken();
-    if (!token) {
-      throw new Error('Vous devez être connecté pour vérifier si vous suivez un utilisateur');
-    }
-    
-    // Appeler l'API pour vérifier le suivi
-    const response = await fetch(`${backendUrl}/users/${userId}/isFollowing`, {
-      headers: getAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      return handleApiError(errorData, 'Erreur lors de la vérification du suivi');
-    }
-    
-    const data = await response.json();
-    console.log(`✅ [SUBSCRIPTION] Vérification de suivi réussie: ${data.isFollowing ? 'Suit' : 'Ne suit pas'}`);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ [SUBSCRIPTION] Erreur:', error);
-    throw error;
+  const token = getAuthToken();
+  if (!token) {
+    return { isFollowing: false };
   }
+
+  const response = await fetch(`${backendUrl}/users/${userId}/isFollowing`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, 'Impossible de vérifier l’abonnement');
+  }
+
+  const payload = unwrapRecord(await response.json());
+  return { isFollowing: payload.isFollowing === true };
 };
 
 /**

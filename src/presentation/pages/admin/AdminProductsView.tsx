@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { getErrorStatus, getUserErrorMessage } from "@domain/errors/app-error";
 import { useToast } from "@/hooks/use-toast";
 import { formatFcfa, productStatusLabel } from "@/lib/admin-analytics";
+import { chargedPrice, isPromoPrice } from "@/components/product/ProductPrice";
 import {
   useAdminProductsListQuery,
   useDeleteAdminProductMutation,
@@ -146,7 +147,16 @@ export function AdminProductsView({ enabled }: { enabled: boolean }) {
                     </Td>
                     <Td>{product.shop?.name || "—"}</Td>
                     <Td>{product.categorieProd?.name || "—"}</Td>
-                    <Td>{formatFcfa(product.price)}</Td>
+                    <Td>
+                      {isPromoPrice(product.price, product.promoPrice) ? (
+                        <span className="inline-flex items-baseline gap-2">
+                          <span>{formatFcfa(chargedPrice(product.price, product.promoPrice))}</span>
+                          <span className="text-white/40 line-through">{formatFcfa(product.price)}</span>
+                        </span>
+                      ) : (
+                        formatFcfa(product.price)
+                      )}
+                    </Td>
                     <Td className={product.stock < 10 ? "text-amber-300" : undefined}>
                       {product.stock}
                     </Td>
@@ -197,7 +207,16 @@ export function AdminProductsView({ enabled }: { enabled: boolean }) {
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                  <span className="text-white/80">{formatFcfa(product.price)}</span>
+                  <span className="text-white/80">
+                    {isPromoPrice(product.price, product.promoPrice) ? (
+                      <span className="inline-flex items-baseline gap-2">
+                        <span>{formatFcfa(chargedPrice(product.price, product.promoPrice))}</span>
+                        <span className="text-white/40 line-through">{formatFcfa(product.price)}</span>
+                      </span>
+                    ) : (
+                      formatFcfa(product.price)
+                    )}
+                  </span>
                   <span className={product.stock < 10 ? "text-amber-300" : "text-white/60"}>
                     Stock : {product.stock}
                   </span>

@@ -1,4 +1,5 @@
 import Swal, { type SweetAlertIcon, type SweetAlertResult } from "sweetalert2";
+import { confirmAction } from "@/components/feedback/confirm-dialog";
 
 const baseOptions = {
   confirmButtonColor: "#0A2540",
@@ -34,16 +35,14 @@ export const appAlert = {
     text?: string;
     confirmText?: string;
     cancelText?: string;
+    danger?: boolean;
   }): Promise<boolean> {
-    const result = await Swal.fire({
-      ...baseOptions,
-      icon: "question",
+    return confirmAction({
       title: options.title,
-      text: options.text,
-      showCancelButton: true,
-      confirmButtonText: options.confirmText || "Confirmer",
-      cancelButtonText: options.cancelText || "Annuler",
+      description: options.text,
+      confirmLabel: options.confirmText || "Confirmer",
+      cancelLabel: options.cancelText || "Annuler",
+      variant: options.danger ? "danger" : "default",
     });
-    return result.isConfirmed;
   },
 };

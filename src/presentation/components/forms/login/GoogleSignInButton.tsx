@@ -3,10 +3,10 @@
 import React from "react";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useGoogleLoginMutation } from "@/presentation/hooks/mutations/use-auth-mutations";
 import { dashboardPathFor } from "@/hooks/use-auth-session";
+import { useGoogleAuthReady } from "@/presentation/providers/google-auth-gate";
 
 interface GoogleSignInButtonProps {
   className?: string;
@@ -15,7 +15,7 @@ interface GoogleSignInButtonProps {
 
 const GoogleSignInButton = ({ className, onClose }: GoogleSignInButtonProps) => {
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const googleReady = useGoogleAuthReady();
   const googleLogin = useGoogleLoginMutation();
   const isLoading = googleLogin.isPending;
 
@@ -36,7 +36,7 @@ const GoogleSignInButton = ({ className, onClose }: GoogleSignInButtonProps) => 
       const destination = session.needsCompletion
         ? `/complete-profile?token=${session.token}`
         : dashboardPathFor(session.user.role);
-      navigate(destination);
+      window.location.replace(destination);
     } catch (error) {
       toast({
         title: "Connexion Google impossible",
@@ -48,6 +48,18 @@ const GoogleSignInButton = ({ className, onClose }: GoogleSignInButtonProps) => 
       });
     }
   };
+
+  if (!googleReady) {
+    return (
+      <button
+        type="button"
+        disabled
+        className={`flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-400 ${className ?? ""}`}
+      >
+        Continuer avec Google
+      </button>
+    );
+  }
 
   return (
     <div className={`relative w-full ${className ?? ""}`}>

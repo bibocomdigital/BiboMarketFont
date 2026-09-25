@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Store, Upload, MapPin, Phone, X, Tag } from "lucide-react";
 import { useCreateShopMutation } from "@/hooks/mutations/use-catalog-mutations";
 import { isLogoUploadFailure } from "@/services/shopService";
 import { useShopCategoriesQuery } from "@/hooks/queries/use-shop-categories-query";
+import { listShopPlans, type ShopPlan } from "@/services/badgeService";
 import { appAlert } from "@/presentation/lib/swal";
 
 import {
@@ -33,6 +34,7 @@ interface CreateShopFormData {
   phoneNumber: string;
   address: string;
   categorieShopId: string;
+  planId: string;
 }
 
 interface CreateShopDialogProps {
@@ -57,6 +59,7 @@ const CreateShopDialog: React.FC<CreateShopDialogProps> = ({ onSuccess }) => {
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [previewURL, setPreviewURL] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [plans, setPlans] = useState<ShopPlan[]>([]);
   const {
     data: categories = [],
     isError: categoriesFailed,
@@ -76,6 +79,21 @@ const CreateShopDialog: React.FC<CreateShopDialogProps> = ({ onSuccess }) => {
     setError,
     formState: { errors },
   } = useForm<CreateShopFormData>();
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listShopPlans()
+      .then((rows) => {
+        if (!cancelled) setPlans(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPlans([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const showShopError = async (error: unknown) => {
     const message =
@@ -149,6 +167,7 @@ const CreateShopDialog: React.FC<CreateShopDialogProps> = ({ onSuccess }) => {
     formData.append("phoneNumber", data.phoneNumber);
     formData.append("address", data.address);
     formData.append("categorieShopId", data.categorieShopId);
+    if (data.planId) formData.append("planId", data.planId);
 
     if (selectedLogo) {
       formData.append("logo", selectedLogo);
@@ -295,6 +314,35 @@ const CreateShopDialog: React.FC<CreateShopDialogProps> = ({ onSuccess }) => {
                 <p className="text-red-500 text-xs mt-1">{categoryLoadError}</p>
               )}
             </div>
+
+            {plans.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="planId" className="flex items-center">
+                  <Tag className="h-4 w-4 mr-2 text-bibocom-accent" />
+                  Formule <span className="text-red-500 ml-1">*</span>
+                </Label>
+                <select
+                  id="planId"
+                  {...register("planId", {
+                    required: "Choisissez une formule",
+                  })}
+                  className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ${
+                    errors.planId ? "border-red-500" : "border-input"
+                  }`}
+                >
+                  <option value="">Choisissez une formule</option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} — {plan.maxProducts} produits, {plan.durationDays} jours,{" "}
+                      {plan.priceCfa === 0 ? "Gratuit" : `${plan.priceCfa.toLocaleString("fr-FR")} FCFA`}
+                    </option>
+                  ))}
+                </select>
+                {errors.planId && (
+                  <p className="text-red-500 text-xs mt-1">{errors.planId.message}</p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="description" className="flex items-center">

@@ -3,10 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 import { formatImageUrl } from '@/services/productService';
+import { isPromoPrice, ProductPrice } from '@/components/product/ProductPrice';
 import { useProductCategoriesQuery, useProductsQuery } from '@/hooks/queries/use-products-query';
 import { useAddToCartMutation } from '@/hooks/mutations/use-cart-mutations';
 import { 
   getUserProductReaction, 
+  nonNegativeCount,
   toggleProductLike, 
   toggleProductDislike,
 } from '@/services/likeService';
@@ -16,10 +18,12 @@ import { ServiceUnavailableState } from '@/components/feedback/ServiceUnavailabl
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useSearchParams } from 'react-router-dom';
 import ProductDetailModal from '@/components/ProductDetailModal';
+import ProductMiniPlayer from '@/components/ProductMiniPlayer';
+import { VoirPlusButton } from '@/components/ui/voir-plus-button';
 
-const ProductsGrid = () => {
+const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) => {
   const { isAuthenticated: isLoggedIn, user } = useAuthSession();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const categoryFromUrl = searchParams.get('category');
   const qFromUrl = searchParams.get('q') || '';
   const [pagination, setPagination] = useState({
@@ -29,17 +33,18 @@ const ProductsGrid = () => {
     totalPages: 0,
     category: undefined as number | undefined,
   });
-  const productsQuery = useProductsQuery(pagination.page, pagination.limit);
-  const categoriesQuery = useProductCategoriesQuery();
-  const addToCartMutation = useAddToCartMutation();
-  const categories = categoriesQuery.data ?? [];
-  const [error, setError] = useState<string | null>(null);
-  
-  // États pour le filtrage
   const [searchTerm, setSearchTerm] = useState(qFromUrl);
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(
     categoryFromUrl ? Number(categoryFromUrl) : undefined
   );
+  const productsQuery = useProductsQuery(pagination.page, pagination.limit, {
+    categoryId: selectedCategory,
+    searchTerm: searchTerm.trim() || undefined,
+  });
+  const categoriesQuery = useProductCategoriesQuery();
+  const addToCartMutation = useAddToCartMutation();
+  const categories = categoriesQuery.data ?? [];
+  const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   
   // États pour la modal et le produit sélectionné
@@ -60,9 +65,11 @@ const ProductsGrid = () => {
   
   const [cartMessages, setCartMessages] = useState<{[key: number]: boolean}>({});
   const [commentsCountByProduct, setCommentsCountByProduct] = useState<{[key: number]: number}>({});
+  const [floatingVideo, setFloatingVideo] = useState<{ id: number; name: string; videoUrl: string } | null>(null);
 
   useEffect(() => {
-    if (qFromUrl) setSearchTerm(qFromUrl);
+    setSearchTerm(qFromUrl);
+    setPagination((prev) => ({ ...prev, page: 1 }));
   }, [qFromUrl]);
 
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -124,8 +131,8 @@ const ProductsGrid = () => {
   });
   const total = filteredProducts.length;
   const totalPages = Math.ceil(total / pagination.limit);
-  const startIndex = (pagination.page - 1) * pagination.limit;
-  const products = filteredProducts.slice(startIndex, startIndex + pagination.limit);
+  const products = filteredProducts.slice(0, pagination.page * pagination.limit);
+  const remainingProducts = Math.max(0, total - products.length);
   const loading = productsQuery.isPending && !productsQuery.data;
   const isCatalogUnavailable = productsQuery.isError && !productsQuery.data;
 
@@ -161,8 +168,12 @@ const ProductsGrid = () => {
       const commentsCountData: {[key: number]: number} = {};
 
       await Promise.all(products.map(async (product) => {
-        likesCountData[product.id] = product.likesCount ?? product._count?.likes ?? 0;
-        commentsCountData[product.id] = product.commentsCount ?? product._count?.comments ?? 0;
+        likesCountData[product.id] = nonNegativeCount(
+          product.likesCount ?? product._count?.likes,
+        );
+        commentsCountData[product.id] = nonNegativeCount(
+          product.commentsCount ?? product._count?.comments,
+        );
         likesData[product.id] = Boolean(product.isLiked);
         dislikesData[product.id] = false;
 
@@ -285,23 +296,40 @@ const ProductsGrid = () => {
     return formatImageUrl(imageUrl);
   };
 
-  // Fonction pour réinitialiser les filtres
+  const writeSearchParam = (term: string) => {
+    const next = term.trim();
+    setSearchParams((prev) => {
+      if ((prev.get('q') || '') === next) return prev;
+      const params = new URLSearchParams(prev);
+      if (next) params.set('q', next);
+      else params.delete('q');
+      return params;
+    });
+  };
+
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedCategory(undefined);
     setPagination(prev => ({ ...prev, page: 1, category: undefined }));
+    if (hideSearchBar) {
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        params.delete('q');
+        params.delete('category');
+        return params;
+      });
+    }
   };
 
-  // Fonction pour appliquer le filtre de catégorie
   const handleCategoryFilter = (categoryId: number | undefined) => {
     setSelectedCategory(categoryId);
     setPagination(prev => ({ ...prev, page: 1, category: categoryId }));
   };
 
-  // Fonction pour gérer la recherche
   const handleSearch = (term: string) => {
     setSearchTerm(term);
     setPagination(prev => ({ ...prev, page: 1 }));
+    if (hideSearchBar) writeSearchParam(term);
   };
 
   // Réinitialiser à la page 1 quand on change de filtre  
@@ -386,8 +414,8 @@ const ProductsGrid = () => {
       // Pour optimiser l'UI, mettre à jour l'interface avant la réponse du serveur
       const currentLikeStatus = likes[productId] || false;
       const currentDislikeStatus = dislikes[productId] || false;
-      const currentLikesCount = likesCount[productId] || 0;
-      const currentDislikesCount = dislikesCount[productId] || 0;
+      const currentLikesCount = nonNegativeCount(likesCount[productId]);
+      const currentDislikesCount = nonNegativeCount(dislikesCount[productId]);
       
       // Si l'utilisateur a déjà disliké et qu'il like maintenant, on retire le dislike
       if (currentDislikeStatus) {
@@ -397,7 +425,7 @@ const ProductsGrid = () => {
         }));
         setDislikesCount(prev => ({
           ...prev,
-          [productId]: Math.max(0, currentDislikesCount - 1)
+          [productId]: nonNegativeCount(currentDislikesCount - 1)
         }));
       }
       
@@ -411,7 +439,9 @@ const ProductsGrid = () => {
       // Mettre à jour le compteur: +1 si ajout d'un like, -1 si retrait
       setLikesCount(prev => ({
         ...prev,
-        [productId]: newLikeStatus ? currentLikesCount + 1 : Math.max(0, currentLikesCount - 1)
+        [productId]: newLikeStatus
+          ? currentLikesCount + 1
+          : nonNegativeCount(currentLikesCount - 1)
       }));
       
       // Appeler l'API pour persister le changement
@@ -420,12 +450,12 @@ const ProductsGrid = () => {
       // Mettre à jour avec les valeurs retournées par le serveur
       setLikesCount(prev => ({
         ...prev,
-        [productId]: result.likesCount
+        [productId]: nonNegativeCount(result.likesCount)
       }));
       
       setDislikesCount(prev => ({
         ...prev,
-        [productId]: result.dislikesCount
+        [productId]: nonNegativeCount(result.dislikesCount)
       }));
       
       if (result.action === 'liked') {
@@ -467,8 +497,8 @@ const ProductsGrid = () => {
       // Pour optimiser l'UI, mettre à jour l'interface avant la réponse du serveur
       const currentLikeStatus = likes[productId] || false;
       const currentDislikeStatus = dislikes[productId] || false;
-      const currentLikesCount = likesCount[productId] || 0;
-      const currentDislikesCount = dislikesCount[productId] || 0;
+      const currentLikesCount = nonNegativeCount(likesCount[productId]);
+      const currentDislikesCount = nonNegativeCount(dislikesCount[productId]);
       
       // Si l'utilisateur a déjà liké et qu'il dislike maintenant, on retire le like
       if (currentLikeStatus) {
@@ -478,7 +508,7 @@ const ProductsGrid = () => {
         }));
         setLikesCount(prev => ({
           ...prev,
-          [productId]: Math.max(0, currentLikesCount - 1)
+          [productId]: nonNegativeCount(currentLikesCount - 1)
         }));
       }
       
@@ -492,7 +522,9 @@ const ProductsGrid = () => {
       // Mettre à jour le compteur: +1 si ajout d'un dislike, -1 si retrait
       setDislikesCount(prev => ({
         ...prev,
-        [productId]: newDislikeStatus ? currentDislikesCount + 1 : Math.max(0, currentDislikesCount - 1)
+        [productId]: newDislikeStatus
+          ? currentDislikesCount + 1
+          : nonNegativeCount(currentDislikesCount - 1)
       }));
       
       // Appeler l'API pour persister le changement
@@ -501,12 +533,12 @@ const ProductsGrid = () => {
       // Mettre à jour avec les valeurs retournées par le serveur
       setLikesCount(prev => ({
         ...prev,
-        [productId]: result.likesCount
+        [productId]: nonNegativeCount(result.likesCount)
       }));
       
       setDislikesCount(prev => ({
         ...prev,
-        [productId]: result.dislikesCount
+        [productId]: nonNegativeCount(result.dislikesCount)
       }));
       
       if (result.action === 'disliked') {
@@ -551,10 +583,10 @@ const ProductsGrid = () => {
 
   const getCommentsCount = (productId: number) => {
     if (commentsCountByProduct[productId] != null) {
-      return commentsCountByProduct[productId];
+      return nonNegativeCount(commentsCountByProduct[productId]);
     }
     const product = products.find(p => p.id === productId);
-    return product?.commentsCount || product?._count?.comments || 0;
+    return nonNegativeCount(product?.commentsCount ?? product?._count?.comments);
   };
 
   if (isCatalogUnavailable) {
@@ -578,7 +610,7 @@ const ProductsGrid = () => {
     <div className="container mx-auto px-4 py-8">
       {/* Barre de navigation et filtres */}
       <div className="mb-8">
-        {/* Barre de recherche */}
+        {!hideSearchBar && (
         <div className="mb-6">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -593,6 +625,7 @@ const ProductsGrid = () => {
             />
           </div>
         </div>
+        )}
 
         {/* Filtres et bouton toggle */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -701,6 +734,11 @@ const ProductsGrid = () => {
               >
                 {/* Product Image Carousel */}
                 <div className="relative h-48 overflow-hidden bg-gray-100">
+                  {isPromoPrice(product.price, product.promoPrice) ? (
+                    <span className="absolute left-2 top-2 z-10 rounded-full bg-bibocom-accent px-2 py-0.5 text-[11px] font-semibold text-white">
+                      Promo
+                    </span>
+                  ) : null}
                   {product.images && product.images.length > 0 ? (
                     <>
                       <img
@@ -748,10 +786,21 @@ const ProductsGrid = () => {
                     </div>
                   )}
                   {product.videoUrl && (
-                    <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white">
+                    <button
+                      type="button"
+                      className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white hover:bg-black/90"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setFloatingVideo({
+                          id: product.id,
+                          name: product.name,
+                          videoUrl: product.videoUrl as string,
+                        });
+                      }}
+                    >
                       <Play size={12} />
                       Vidéo
-                    </span>
+                    </button>
                   )}
                   <button
                     className="absolute bottom-2 right-2 bg-orange-500 hover:bg-orange-600 text-white p-2 rounded-full shadow-md transition-colors z-10"
@@ -776,7 +825,7 @@ const ProductsGrid = () => {
                   <h3 className="font-medium text-gray-800 mb-2 line-clamp-1">{product.name}</h3>
                   <p className="text-gray-500 mb-3 text-sm line-clamp-2">{product.description}</p>
                   <div className="flex justify-between items-center">
-                    <div className="text-lg font-bold text-gray-900">{product.price}</div>
+                    <ProductPrice price={product.price} promoPrice={product.promoPrice} />
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center">
                         <button 
@@ -789,7 +838,7 @@ const ProductsGrid = () => {
                             className={`transition-colors ${likes[product.id] ? 'fill-red-500 text-red-500' : 'text-gray-500'}`}
                           />
                         </button>
-                        <span className="text-xs text-gray-500">{likesCount[product.id] || 0}</span>
+                        <span className="text-xs text-gray-500">{nonNegativeCount(likesCount[product.id])}</span>
                       </div>
                       
                       <div className="flex items-center">
@@ -803,7 +852,7 @@ const ProductsGrid = () => {
                             className={`transition-colors ${dislikes[product.id] ? 'fill-blue-500 text-blue-500' : 'text-gray-500'}`}
                           />
                         </button>
-                        <span className="text-xs text-gray-500">{dislikesCount[product.id] || 0}</span>
+                        <span className="text-xs text-gray-500">{nonNegativeCount(dislikesCount[product.id])}</span>
                       </div>
                       
                       <div className="flex items-center">
@@ -817,69 +866,21 @@ const ProductsGrid = () => {
             ))}
           </div>
 
-          {/* Pagination améliorée */}
-          {pagination.totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between mt-8 space-y-4 sm:space-y-0">
-              {/* Informations sur la pagination */}
-              <div className="text-sm text-gray-700">
-                Affichage de {((pagination.page - 1) * pagination.limit) + 1} à{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)} sur{' '}
-                {pagination.total} produits
-              </div>
-              
-              {/* Contrôles de pagination */}
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={handlePrevPage}
-                  disabled={pagination.page === 1}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                    pagination.page === 1 
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  Précédent
-                </button>
-                
-                {/* Numéros de pages */}
-                <div className="flex items-center space-x-1">
-                  {getPageNumbers().map((pageNumber, index) => (
-                    <React.Fragment key={`page-${index}`}>
-                      {pageNumber === '...' ? (
-                        <span className="px-2 py-1 text-gray-500">...</span>
-                      ) : (
-                        <button
-                          onClick={() => goToPage(pageNumber as number)}
-                          className={`w-10 h-10 rounded-lg text-sm font-medium ${
-                            pagination.page === pageNumber 
-                              ? 'bg-blue-500 text-white' 
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          {pageNumber}
-                        </button>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </div>
-                
-                <button
-                  onClick={handleNextPage}
-                  disabled={pagination.page === pagination.totalPages}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                    pagination.page === pagination.totalPages 
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  Suivant
-                </button>
-              </div>
-            </div>
-          )}
+          <VoirPlusButton
+            remaining={remainingProducts}
+            onClick={handleNextPage}
+            noun="produit"
+          />
         </>
       )}
       
+      {!isModalOpen && floatingVideo && (
+        <ProductMiniPlayer
+          title={floatingVideo.name}
+          url={floatingVideo.videoUrl}
+          onClose={() => setFloatingVideo(null)}
+        />
+      )}
       {isModalOpen && selectedProduct && (
         <ProductDetailModal
           product={selectedProduct}
@@ -891,9 +892,9 @@ const ProductsGrid = () => {
           onReactionChange={(productId, state) => {
             setLikes((prev) => ({ ...prev, [productId]: state.liked }));
             setDislikes((prev) => ({ ...prev, [productId]: state.disliked }));
-            setLikesCount((prev) => ({ ...prev, [productId]: state.likesCount }));
-            setDislikesCount((prev) => ({ ...prev, [productId]: state.dislikesCount }));
-            setCommentsCountByProduct((prev) => ({ ...prev, [productId]: state.commentsCount }));
+            setLikesCount((prev) => ({ ...prev, [productId]: nonNegativeCount(state.likesCount) }));
+            setDislikesCount((prev) => ({ ...prev, [productId]: nonNegativeCount(state.dislikesCount) }));
+            setCommentsCountByProduct((prev) => ({ ...prev, [productId]: nonNegativeCount(state.commentsCount) }));
           }}
         />
       )}

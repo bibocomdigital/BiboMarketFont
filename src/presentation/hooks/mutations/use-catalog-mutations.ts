@@ -82,8 +82,26 @@ export function useToggleFollowMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (userId: number) => toggleFollow(userId),
-    onSuccess: (_data, userId) => {
-      queryClient.invalidateQueries({ queryKey: userKeys.followStatus(userId) });
+    retry: false,
+    onMutate: async (userId) => {
+      await queryClient.cancelQueries({ queryKey: userKeys.followStatus(userId) });
+      const previous = queryClient.getQueryData<{ isFollowing?: boolean }>(
+        userKeys.followStatus(userId),
+      );
+      queryClient.setQueryData(userKeys.followStatus(userId), {
+        isFollowing: !(previous?.isFollowing ?? false),
+      });
+      return { previous, userId };
+    },
+    onError: (_error, userId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(userKeys.followStatus(userId), context.previous);
+      }
+    },
+    onSuccess: (data, userId) => {
+      queryClient.setQueryData(userKeys.followStatus(userId), {
+        isFollowing: data.action === "followed",
+      });
       queryClient.invalidateQueries({ queryKey: userKeys.followers(userId) });
     },
   });

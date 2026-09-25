@@ -10,6 +10,7 @@ import {
 } from "@/lib/admin-analytics";
 import {
   useAdminUsersListQuery,
+  useCreateAdminUserMutation,
   useDeleteAdminUserMutation,
   usePatchAdminUserMutation,
 } from "@/hooks/queries/use-admin-query";
@@ -30,9 +31,11 @@ import {
 
 export function AdminUsersView({
   enabled,
+  canAssignStaff = false,
   onMessageMerchant,
 }: {
   enabled: boolean;
+  canAssignStaff?: boolean;
   onMessageMerchant?: (id: number) => void;
 }) {
   const { toast } = useToast();
@@ -48,7 +51,20 @@ export function AdminUsersView({
     [page, role, search]
   );
   const query = useAdminUsersListQuery(filters, enabled);
+  const optionsFor = (current: string) =>
+    ROLE_ORDER.filter(
+      (item) =>
+        canAssignStaff ||
+        item === current ||
+        (item !== "SUPER_ADMIN" && item !== "MODERATOR")
+    );
   const patchUser = usePatchAdminUserMutation();
+  const createUser = useCreateAdminUserMutation();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("+221");
+  const [newRole, setNewRole] = useState("CLIENT");
+  const [issuedPassword, setIssuedPassword] = useState("");
   const deleteUser = useDeleteAdminUserMutation();
   const users = query.data?.users ?? [];
   const pagination = query.data?.pagination;
@@ -63,8 +79,57 @@ export function AdminUsersView({
     toast({ title: "Action impossible", description: message, variant: "destructive" });
   };
 
+  const submitUser = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIssuedPassword("");
+    try {
+      const result = await createUser.mutateAsync({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phoneNumber: phoneNumber.replace(/\s/g, ""),
+        role: newRole,
+      });
+      setFirstName("");
+      setLastName("");
+      setPhoneNumber("+221");
+      setIssuedPassword(result.temporaryPassword || "");
+      toast({
+        title: "Compte créé",
+        description: result.message || "Identifiants envoyés par SMS",
+      });
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {canAssignStaff ? (
+        <Panel className="p-4">
+          <h2 className="text-sm font-semibold text-white">Ajouter un utilisateur</h2>
+          <p className="mt-1 text-xs text-white/50">
+            Un mot de passe est généré et envoyé par SMS sur le téléphone saisi.
+          </p>
+          <form onSubmit={submitUser} className="mt-3 grid gap-2 md:grid-cols-5">
+            <AdminInput value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="Prénom" required />
+            <AdminInput value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Nom" required />
+            <AdminInput value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="+221…" required />
+            <AdminSelect value={newRole} onChange={(event) => setNewRole(event.target.value)}>
+              {ROLE_ORDER.filter((item) => item !== "SUPER_ADMIN").map((item) => (
+                <option key={item} value={item}>{roleLabel(item)}</option>
+              ))}
+            </AdminSelect>
+            <GhostButton type="submit" disabled={createUser.isPending} className="h-10">
+              {createUser.isPending ? "Envoi…" : "Créer et envoyer"}
+            </GhostButton>
+          </form>
+          {issuedPassword ? (
+            <p className="mt-3 text-sm text-amber-200">
+              SMS parti. Mot de passe de test : {issuedPassword}
+            </p>
+          ) : null}
+        </Panel>
+      ) : null}
       <div className="flex flex-col gap-3 sm:flex-row">
         <AdminInput
           value={draft}
@@ -142,7 +207,7 @@ export function AdminUsersView({
                           )
                         }
                       >
-                        {ROLE_ORDER.map((item) => (
+                        {optionsFor(String(user.role || "")).map((item) => (
                           <option key={item} value={item}>
                             {roleLabel(item)}
                           </option>
@@ -211,7 +276,7 @@ export function AdminUsersView({
                           )
                         }
                       >
-                        {ROLE_ORDER.map((item) => (
+                        {optionsFor(String(user.role || "")).map((item) => (
                           <option key={item} value={item}>
                             {roleLabel(item)}
                           </option>

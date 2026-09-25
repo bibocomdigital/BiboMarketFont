@@ -2,7 +2,6 @@ import { AppError } from "@domain/errors/app-error";
 import { parseApiError } from "../api/fetch-error";
 import { unwrapRecord } from "../api/api-envelope";
 import { backendUrl, getAuthHeaders, getAuthToken } from "./configService";
-import { logout } from "./authService";
 
 export type MerchantRevenuePoint = {
   date: string;
@@ -98,12 +97,10 @@ async function merchantGet<T>(path: string, fallback: string): Promise<T> {
     );
   }
   const response = await fetch(`${backendUrl}${path}`, {
+    cache: "no-store",
     headers: getAuthHeaders(),
   });
   if (!response.ok) {
-    if (response.status === 401) {
-      logout();
-    }
     throw await parseApiError(response, fallback);
   }
   return unwrapRecord(await response.json()) as T;

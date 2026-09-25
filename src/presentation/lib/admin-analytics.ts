@@ -1,6 +1,6 @@
 import { USER_ROLE_LABELS, UserRole } from "@/types/user";
 
-export const ROLE_ORDER = ["CLIENT", "MERCHANT", "SUPPLIER", "ADMIN"] as const;
+export const ROLE_ORDER = ["CLIENT", "MERCHANT", "SUPPLIER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] as const;
 
 export const ORDER_STATUSES = [
   "PENDING",

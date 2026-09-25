@@ -4,6 +4,7 @@ import React, { useRef, useEffect } from 'react';
 import { Send, Mic, Smile, Paperclip, Check, CheckCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MessageBody } from '@/components/messages/MessageBody';
 
 /**
  * Composant réutilisable pour la zone de conversation
@@ -210,7 +211,11 @@ const ConversationArea = ({
                         )}
 
                         {/* Texte du message (si présent) */}
-                        {messageText && <p className="text-sm">{messageText}</p>}
+                        {messageText && (
+                          <div className="text-sm">
+                            <MessageBody content={messageText} />
+                          </div>
+                        )}
                         
                         {/* Message audio (si présent) */}
                         {(msg.audio || msg.isVoiceMessage) && (

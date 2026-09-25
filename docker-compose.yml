@@ -29,7 +29,7 @@ services:
     build:
       context: ../BiboMarketBack
       target: prod
-    image: bibocomdigital/bibomarket-backend-develop:latest
+    # image: bibocomdigital/bibomarket-backend-develop:latest
     env_file:
       - .env.backend
     environment:

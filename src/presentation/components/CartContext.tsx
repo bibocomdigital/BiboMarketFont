@@ -19,9 +19,9 @@ export const useCart = () => useContext(CartContext);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user } = useAuthSession();
   const { data: cart, refetch } = useCartQuery();
-  const itemsCount = getCartItemsCount(cart?.items);
   const canRefresh =
     isAuthenticated && String(user?.role || "").toUpperCase() === "CLIENT";
+  const itemsCount = canRefresh ? getCartItemsCount(cart?.items) : 0;
 
   const refreshCart = async () => {
     if (!canRefresh) return;

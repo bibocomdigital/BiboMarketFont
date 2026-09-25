@@ -1,4 +1,10 @@
-export type UserRoleValue = "CLIENT" | "MERCHANT" | "SUPPLIER" | "ADMIN";
+export type UserRoleValue =
+  | "CLIENT"
+  | "MERCHANT"
+  | "SUPPLIER"
+  | "MODERATOR"
+  | "ADMIN"
+  | "SUPER_ADMIN";
 
 class User {
   constructor(

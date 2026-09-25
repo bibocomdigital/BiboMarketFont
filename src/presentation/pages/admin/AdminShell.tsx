@@ -10,6 +10,12 @@ import {
   Star,
   Tags,
   MessageSquare,
+  BadgeCheck,
+  Clapperboard,
+  Megaphone,
+  LifeBuoy,
+  Wallet,
+  Shield,
   LogOut,
   ChevronLeft,
   Menu,
@@ -26,7 +32,16 @@ export type AdminSection =
   | "orders"
   | "messages"
   | "feedbacks"
-  | "categories";
+  | "categories"
+  | "stories"
+  | "reports"
+  | "ads"
+  | "tickets"
+  | "finance"
+  | "security"
+  | "badge";
+
+export type AdminAudience = "super" | "admin" | "moderator";
 
 const NAV_ITEMS: Array<{
   id: AdminSection;
@@ -41,7 +56,16 @@ const NAV_ITEMS: Array<{
   { id: "messages", label: "Messages", icon: MessageSquare },
   { id: "feedbacks", label: "Avis", icon: Star },
   { id: "categories", label: "Catégories", icon: Tags },
+  { id: "stories", label: "Stories", icon: Clapperboard },
+  { id: "reports", label: "Signalements", icon: Clapperboard },
+  { id: "ads", label: "Publicités", icon: Megaphone },
+  { id: "tickets", label: "Support", icon: LifeBuoy },
+  { id: "finance", label: "Finances", icon: Wallet },
+  { id: "security", label: "Sécurité", icon: Shield },
+  { id: "badge", label: "Badge", icon: BadgeCheck },
 ];
+
+const MODERATOR_SECTIONS = new Set<AdminSection>(["shops", "products", "stories", "reports", "messages", "security"]);
 
 const TITLES: Record<AdminSection, string> = {
   dashboard: "Dashboard analytique",
@@ -52,10 +76,18 @@ const TITLES: Record<AdminSection, string> = {
   messages: "Messages",
   feedbacks: "Avis commerçants",
   categories: "Catégories",
+  stories: "Stories",
+  reports: "Signalements",
+  ads: "Publicités",
+  tickets: "Support",
+  finance: "Finances badges",
+  security: "Double authentification",
+  badge: "Badge et formules",
 };
 
 const SUBTITLES: Partial<Record<AdminSection, string>> = {
   messages: "Échangez avec les commerçants de la plateforme",
+  badge: "Prix commerçant, prix livreur et formules des boutiques",
 };
 
 type AdminShellProps = {
@@ -66,6 +98,7 @@ type AdminShellProps = {
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
   displayName: string;
+  audience: AdminAudience;
   onLogout: () => void;
   headerExtra?: React.ReactNode;
   children: React.ReactNode;
@@ -122,6 +155,7 @@ function NavButton({
 function SidebarBody({
   collapsed,
   section,
+  audience,
   onSectionChange,
   onLogout,
   onToggleCollapsed,
@@ -129,12 +163,18 @@ function SidebarBody({
 }: {
   collapsed: boolean;
   section: AdminSection;
+  audience: AdminAudience;
   onSectionChange: (section: AdminSection) => void;
   onLogout: () => void;
   onToggleCollapsed?: () => void;
   showCollapse?: boolean;
 }) {
   const { data: unreadCount = 0 } = useUnreadMessagesQuery();
+  const items = NAV_ITEMS.filter((item) => {
+    if (audience === "moderator") return MODERATOR_SECTIONS.has(item.id);
+    if (item.id === "badge" || item.id === "finance") return audience === "super";
+    return true;
+  });
   return (
     <div className="flex h-full flex-col">
       <div className={cn("flex items-center px-4 pt-5 pb-6", collapsed ? "justify-center" : "justify-between")}>
@@ -154,7 +194,7 @@ function SidebarBody({
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3">
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <NavButton
             key={item.id}
             item={item}
@@ -192,6 +232,7 @@ export function AdminShell({
   mobileOpen,
   onMobileOpenChange,
   displayName,
+  audience,
   onLogout,
   headerExtra,
   children,
@@ -208,6 +249,7 @@ export function AdminShell({
         <SidebarBody
           collapsed={collapsed}
           section={section}
+          audience={audience}
           onSectionChange={onSectionChange}
           onLogout={onLogout}
           onToggleCollapsed={onToggleCollapsed}
@@ -226,6 +268,7 @@ export function AdminShell({
           <aside className="relative z-50 h-full w-[240px] bg-[#12101a] shadow-2xl">
             <SidebarBody
               collapsed={false}
+              audience={audience}
               section={section}
               onSectionChange={(next) => {
                 onSectionChange(next);

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Package, 
@@ -10,7 +10,6 @@ import {
   MapPin, 
   Calendar, 
   Clock, 
-  CreditCard,
   Store,
   Mail,
   FileText,
@@ -24,6 +23,7 @@ import { getUserErrorMessage } from '@domain/errors/app-error';
 import { useOrderDetailsQuery } from '@/hooks/queries/use-orders-query';
 import { useCancelOrderMutation, useUpdateOrderStatusMutation } from '@/hooks/mutations/use-order-mutations';
 import { formatImageUrl } from '@/services/productService';
+import { confirmAction } from '@/components/feedback/confirm-dialog';
 
 const OrderDetailsPage = () => {
   const { orderId } = useParams();
@@ -54,41 +54,68 @@ const OrderDetailsPage = () => {
 
   const handleCancelOrder = async () => {
     if (!order) return;
-    
-    if (!confirm('Êtes-vous sûr de vouloir annuler cette commande ?')) {
-      return;
-    }
-    
+    const accepted = await confirmAction({
+      title: "Annuler cette commande ?",
+      description: "Cette action est définitive. Le vendeur sera informé de l’annulation.",
+      confirmLabel: "Oui, annuler",
+      cancelLabel: "Garder",
+      variant: "danger",
+    });
+    if (!accepted) return;
+
     try {
       setActionError(null);
       await cancelMutation.mutateAsync(order.id);
     } catch (err) {
-      console.error('Erreur lors de l\'annulation:', err);
-      setActionError(err instanceof Error ? err.message : 'Erreur lors de l\'annulation');
+      console.error("Erreur lors de l'annulation:", err);
+      setActionError(err instanceof Error ? err.message : "Erreur lors de l'annulation");
     }
   };
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (!order) return;
-    
+    const prompts: Record<string, { title: string; description: string; confirmLabel: string; variant?: "danger" | "default" }> = {
+      CONFIRMED: {
+        title: "Confirmer cette commande ?",
+        description: "Le client sera informé que vous avez accepté la commande.",
+        confirmLabel: "Confirmer",
+      },
+      SHIPPED: {
+        title: "Marquer comme expédiée ?",
+        description: "Le client verra que sa commande est en cours de livraison.",
+        confirmLabel: "Expédier",
+      },
+      DELIVERED: {
+        title: "Confirmer la réception ?",
+        description: "Vous confirmez avoir bien reçu cette commande.",
+        confirmLabel: "J’ai reçu",
+      },
+      CANCELED: {
+        title: "Annuler cette commande ?",
+        description: "Le client sera informé. Cette action est définitive.",
+        confirmLabel: "Oui, annuler",
+        variant: "danger",
+      },
+    };
+    const prompt = prompts[newStatus];
+    if (prompt) {
+      const accepted = await confirmAction({
+        title: prompt.title,
+        description: prompt.description,
+        confirmLabel: prompt.confirmLabel,
+        cancelLabel: "Retour",
+        variant: prompt.variant ?? "default",
+      });
+      if (!accepted) return;
+    }
+
     try {
       setActionError(null);
       await statusMutation.mutateAsync({ orderId: order.id, status: newStatus });
     } catch (err) {
-      console.error('Erreur lors de la mise à jour:', err);
-      setActionError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
+      console.error("Erreur lors de la mise à jour:", err);
+      setActionError(err instanceof Error ? err.message : "Erreur lors de la mise à jour");
     }
-  };
-
-  // 🆕 Fonction améliorée pour contacter le client (pour les commerçants)
-  const handleContactClient = () => {
-    if (!order?.client?.phoneNumber) return;
-    
-    const clientName = `${order.client?.firstName || ''} ${order.client?.lastName || 'Client'}`.trim();
-    const message = `Bonjour ${clientName}, concernant votre commande #COMANDE-${order.id} sur BibocomMarket.\n\nPour confirmer votre commande, veuillez effectuer le paiement via :\n💳 Wave : [Votre numéro Wave]\n📱 Orange Money : [Votre numéro OM]\n💰 Espèces à la livraison\n\nMerci ! 😊`;
-    
-    const whatsappLink = `https://wa.me/${order.client.phoneNumber.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappLink, '_blank');
   };
 
   // Fonction pour formater le statut
@@ -133,16 +160,29 @@ const OrderDetailsPage = () => {
     }
   };
 
-  // Fonction pour formater la date
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return 'Date inconnue';
+    const day = date.toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
     });
+    const time = date.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `${day} à ${time}`;
   };
+
+  const formatPrice = (price: number) => {
+    const n = Number(price);
+    if (!Number.isFinite(n)) return '—';
+    return `${Math.round(n).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ')} FCFA`;
+  };
+
+  const shopNameOf = (item: { product?: { shop?: { name?: string; shopName?: string } } }) =>
+    item.product?.shop?.name || item.product?.shop?.shopName || 'Boutique';
 
   if (loading) {
     return (
@@ -185,352 +225,318 @@ const OrderDetailsPage = () => {
   }
 
   const statusInfo = getStatusInfo(order.status || 'PENDING');
+  const orderItems = order.orderItems || [];
+  const orderTotal = orderItems.reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+    0,
+  );
+  const shops = Object.values(
+    orderItems.reduce((acc, item) => {
+      const shop = item.product?.shop;
+      const shopId = shop?.id;
+      if (!shopId) return acc;
+      if (!acc[shopId]) {
+        acc[shopId] = { shop, itemCount: 0 };
+      }
+      acc[shopId].itemCount += Number(item.quantity || 0);
+      return acc;
+    }, {} as Record<number, { shop: NonNullable<(typeof orderItems)[number]['product']>['shop']; itemCount: number }>),
+  );
+  const clientName = `${order.client?.firstName || ''} ${order.client?.lastName || ''}`.trim() || 'Client';
+  const clientPhone = order.client?.phoneNumber || null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate(-1)}
-                className="inline-flex items-center gap-1 rounded-full bg-bibocom-accent/10 px-3 py-1.5 text-sm font-medium text-bibocom-accent transition-colors hover:bg-bibocom-accent/20"
-              >
-                <ArrowLeft size={16} />
-                <span className="hidden sm:inline">Retour</span>
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Commande #{`COMANDE-${order.id}`}
-                </h1>
-                <p className="text-gray-600">
-                  Créée le {order.createdAt ? formatDate(order.createdAt) : 'Date inconnue'}
-                </p>
-              </div>
+    <div className="min-h-screen bg-gray-50 pb-8">
+      <div className="border-b bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-4">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="mb-3 inline-flex items-center gap-1 rounded-full bg-bibocom-accent/10 px-3 py-1.5 text-sm font-medium text-bibocom-accent transition-colors hover:bg-bibocom-accent/20"
+          >
+            <ArrowLeft size={16} />
+            <span>Retour</span>
+          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
+                Commande n° {order.id}
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Créée le {order.createdAt ? formatDate(order.createdAt) : 'date inconnue'}
+              </p>
             </div>
-            
-            <div className="flex items-center space-x-3">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center space-x-2 ${statusInfo.color}`}>
-                {statusInfo.icon}
-                <span>{statusInfo.label}</span>
-              </span>
-            </div>
+            <span className={`inline-flex w-fit shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${statusInfo.color}`}>
+              {statusInfo.icon}
+              <span>{statusInfo.label}</span>
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Colonne principale */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Produits commandés */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Package className="mr-2 h-5 w-5 text-orange-500" />
-                Produits commandés ({order.orderItems?.length || 0})
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <section className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+                <Package className="h-5 w-5 shrink-0 text-orange-500" />
+                <span>Produits commandés ({orderItems.length})</span>
               </h2>
-              
-              <div className="space-y-4">
-                {order.orderItems && order.orderItems.length > 0 ? order.orderItems.map((item) => (
-                  <div key={item.id} className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg">
-                    <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                      {item.product?.images && item.product.images.length > 0 ? (
-                        <img
-                          src={item.product.images[0].imageUrl || '/placeholder-image.jpg'}
-                          alt={item.product.name || 'Produit'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Package className="h-6 w-6 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <h3 className="font-medium text-gray-900">{item.product?.name || 'Produit inconnu'}</h3>
-                      <p className="text-sm text-gray-600">Boutique: {item.product?.shop?.name || 'Boutique inconnue'}</p>
-                      <div className="flex items-center space-x-4 mt-2">
-                        <span className="text-sm text-gray-500">
-                          Quantité: {item.quantity || 0}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          Prix unitaire: {(item.price || 0).toLocaleString('fr-FR')} FCFA
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="text-right">
-                      <div className="font-semibold text-gray-900">
-                        {((item.price || 0) * (item.quantity || 0)).toLocaleString('fr-FR')} FCFA
-                      </div>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="text-center py-8">
-                    <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <p className="text-gray-500">Aucun produit trouvé dans cette commande</p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Total */}
-              <div className="border-t mt-6 pt-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold text-gray-900">Total de la commande</span>
-                  <span className="text-xl font-bold text-orange-600">
-                    {order.orderItems ? order.orderItems.reduce((total, item) => total + (item.price * item.quantity), 0).toLocaleString('fr-FR') : '0'} FCFA
-                  </span>
-                </div>
-              </div>
-            </div>
 
-            {/* Informations de livraison */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <MapPin className="mr-2 h-5 w-5 text-orange-500" />
-                Informations de livraison
+              {orderItems.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {orderItems.map((item) => {
+                    const qty = Number(item.quantity || 0);
+                    const unit = Number(item.price || 0);
+                    const line = unit * qty;
+                    const imageUrl = item.product?.images?.[0]?.imageUrl
+                      ? formatImageUrl(item.product.images[0].imageUrl)
+                      : null;
+                    return (
+                      <article key={item.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start">
+                        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                          {imageUrl ? (
+                            <img
+                              src={imageUrl}
+                              alt={item.product?.name || 'Produit'}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Package className="h-6 w-6 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium text-gray-900">{item.product?.name || 'Produit inconnu'}</h3>
+                          <p className="mt-0.5 text-sm text-gray-500">{shopNameOf(item)}</p>
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                            <div>
+                              <p className="text-xs text-gray-400">Quantité</p>
+                              <p className="font-medium text-gray-800">{qty}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-400">Prix unitaire</p>
+                              <p className="font-medium text-gray-800">{formatPrice(unit)}</p>
+                            </div>
+                            <div className="col-span-2 sm:col-span-1 sm:text-right">
+                              <p className="text-xs text-gray-400">Sous-total</p>
+                              <p className="font-semibold text-gray-900">{formatPrice(line)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <Package className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                  <p className="text-sm text-gray-500">Aucun produit dans cette commande</p>
+                </div>
+              )}
+
+              <div className="mt-4 flex items-center justify-between border-t pt-4">
+                <span className="font-semibold text-gray-800">Total</span>
+                <span className="text-lg font-bold text-orange-600">{formatPrice(orderTotal)}</span>
+              </div>
+            </section>
+
+            <section className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+                <MapPin className="h-5 w-5 shrink-0 text-orange-500" />
+                <span>Livraison et statut</span>
               </h2>
-              
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-gray-900">Contact client</p>
-                    <p className="text-gray-600">{order.client?.phoneNumber || 'Numéro non fourni'}</p>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <Phone className="mt-0.5 h-5 w-5 shrink-0 text-gray-400" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Téléphone de contact</p>
+                    <p className="break-all text-sm text-gray-600">{clientPhone || 'Numéro non renseigné'}</p>
                   </div>
                 </div>
-                
-                <div className="flex items-center space-x-3">
-                  <FileText className="h-5 w-5 text-gray-400" />
+                <div className="flex items-start gap-3">
+                  <FileText className="mt-0.5 h-5 w-5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="font-medium text-gray-900">Statut de la commande</p>
-                    <p className="text-gray-600">{statusInfo.label}</p>
+                    <p className="text-sm font-medium text-gray-900">Statut</p>
+                    <p className="text-sm text-gray-600">{statusInfo.label}</p>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
 
-          {/* Barre latérale */}
           <div className="space-y-6">
-            {/* Informations client */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <User className="mr-2 h-5 w-5 text-orange-500" />
-                Informations client
+            <section className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+                <User className="h-5 w-5 shrink-0 text-orange-500" />
+                <span>Client</span>
               </h2>
-              
-              <div className="space-y-3">
-                <div>
-                  <p className="font-medium text-gray-900">
-                    {order.client?.firstName || ''} {order.client?.lastName || 'Client inconnu'}
-                  </p>
-                </div>
-                
-                {/* Email et téléphone - Visible seulement pour les commerçants */}
-                {userRole === 'MERCHANT' && (
-                  <>
-                    <div className="flex items-center space-x-2">
-                      <Mail className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-600">{order.client?.email || 'Email non fourni'}</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Phone className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-600">{order.client?.phoneNumber || 'Téléphone non fourni'}</span>
-                    </div>
-                  </>
-                )}
-                
-                {/* Pour les clients, afficher seulement des infos limitées */}
-                {userRole === 'CLIENT' && (
-                  <div className="text-sm text-gray-500">
-                    Vos informations de contact sont privées
+              <p className="font-medium text-gray-900">{clientName}</p>
+              {userRole === 'MERCHANT' ? (
+                <div className="mt-3 space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 shrink-0 text-gray-400" />
+                    <span className="break-all">{order.client?.email || 'Email non renseigné'}</span>
                   </div>
-                )}
-              </div>
-            </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 shrink-0 text-gray-400" />
+                    <span className="break-all">{clientPhone || 'Téléphone non renseigné'}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-gray-500">Vos informations restent visibles uniquement par le vendeur.</p>
+              )}
+            </section>
 
-            {/* Informations des boutiques */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Store className="mr-2 h-5 w-5 text-orange-500" />
-                Boutiques concernées
+            <section className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+                <Store className="h-5 w-5 shrink-0 text-orange-500" />
+                <span>Boutiques</span>
               </h2>
-              
-              <div className="space-y-4">
-                {order.orderItems && order.orderItems.length > 0 ? (
-                  // Grouper par boutique
-                  Object.values(
-                    order.orderItems.reduce((shops, item) => {
-                      const shopId = item.product?.shop?.id;
-                      if (!shopId) return shops;
-                      
-                      if (!shops[shopId]) {
-                        shops[shopId] = {
-                          shop: item.product.shop,
-                          itemCount: 0
-                        };
-                      }
-                      shops[shopId].itemCount += item.quantity;
-                      return shops;
-                    }, {})
-                  ).map((shopData, index) => (
-                    <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <Store className="h-5 w-5 text-gray-400" />
+              {shops.length > 0 ? (
+                <div className="space-y-3">
+                  {shops.map((shopData) => (
+                    <div key={shopData.shop.id} className="flex items-start gap-3 rounded-lg border border-gray-100 p-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-50">
+                        <Store className="h-5 w-5 text-orange-500" />
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{shopData.shop.name}</p>
-                        <p className="text-sm text-gray-600">
-                          {shopData.itemCount} produit(s) • Tel: {shopData.shop.phoneNumber}
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900">{shopData.shop.name || shopNameOf({ product: { shop: shopData.shop } })}</p>
+                        <p className="text-sm text-gray-500">
+                          {shopData.itemCount} article{shopData.itemCount > 1 ? 's' : ''}
+                          {shopData.shop.phoneNumber ? ` · ${shopData.shop.phoneNumber}` : ''}
                         </p>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500">Aucune boutique trouvée</p>
-                )}
-              </div>
-            </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">Aucune boutique associée</p>
+              )}
+            </section>
 
-            {/* Actions - Différentes selon le rôle */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
-              
+            <section className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-4 text-base font-semibold text-gray-900 sm:text-lg">Actions</h2>
               <div className="space-y-3">
                 {userRole === 'CLIENT' ? (
-                  // Actions pour les clients
                   <>
-                    {/* 🆕 NOUVEAU: Confirmer la réception - seulement si SHIPPED */}
                     {order.status === 'SHIPPED' && (
                       <button
+                        type="button"
                         onClick={() => handleStatusUpdate('DELIVERED')}
                         disabled={updating}
-                        className="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2.5 text-white transition-colors hover:bg-green-600 disabled:opacity-50"
                       >
                         <CheckCircle size={16} />
-                        <span>{updating ? 'Confirmation en cours...' : '✅ J\'ai reçu ma commande'}</span>
+                        <span>{updating ? 'Confirmation…' : 'J’ai reçu ma commande'}</span>
                       </button>
                     )}
-                    
-                    {/* Annuler la commande - seulement si PENDING */}
                     {order.status === 'PENDING' && (
                       <button
+                        type="button"
                         onClick={handleCancelOrder}
                         disabled={updating}
-                        className="w-full bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                        className="w-full rounded-lg bg-red-500 px-4 py-2.5 text-white transition-colors hover:bg-red-600 disabled:opacity-50"
                       >
-                        {updating ? 'Annulation en cours...' : 'Annuler la commande'}
+                        {updating ? 'Annulation…' : 'Annuler la commande'}
                       </button>
                     )}
-                    
-                    {/* Retour aux commandes */}
                     <button
-                      onClick={() => navigate('/client-dashboard')}
-                      className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
+                      type="button"
+                      onClick={() => navigate('/client-dashboard?view=orders')}
+                      className="w-full rounded-lg bg-gray-100 px-4 py-2.5 font-medium text-gray-800 transition-colors hover:bg-gray-200"
                     >
                       Retour à mes commandes
                     </button>
-                    
-                    {/* Aide */}
                     <button
-                      onClick={() => {
-                        console.log('Besoin d\'aide');
-                      }}
-                      className="w-full border border-orange-500 text-orange-500 py-2 px-4 rounded-lg hover:bg-orange-50 transition-colors"
+                      type="button"
+                      onClick={() => navigate('/client-dashboard?view=messages')}
+                      className="w-full rounded-lg border border-orange-500 px-4 py-2.5 font-medium text-orange-500 transition-colors hover:bg-orange-50"
                     >
-                      Besoin d'aide ?
+                      Contacter le vendeur
                     </button>
                   </>
                 ) : (
-                  // Actions pour les commerçants - RESTE IDENTIQUE
                   <>
-                    {/* 🆕 Contacter le client avec message amélioré */}
-                    {order.client?.phoneNumber && (
+                    {order.client?.id && (
                       <button
-                        onClick={handleContactClient}
-                        className="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center space-x-2"
+                        type="button"
+                        onClick={() => navigate(`/merchant-dashboard?view=messages&partner=${order.client.id}`)}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2.5 text-white transition-colors hover:bg-green-600"
                       >
                         <Phone size={16} />
                         <span>Contacter le client</span>
                       </button>
                     )}
-
                     {order.status === 'PENDING' && (
                       <button
+                        type="button"
                         onClick={() => handleStatusUpdate('CONFIRMED')}
                         disabled={updating}
-                        className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        className="w-full rounded-lg bg-blue-500 px-4 py-2.5 text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
                       >
-                        {updating ? 'Mise à jour...' : 'Confirmer la commande'}
+                        {updating ? 'Mise à jour…' : 'Confirmer la commande'}
                       </button>
                     )}
-                    
                     {order.status === 'CONFIRMED' && (
                       <button
+                        type="button"
                         onClick={() => handleStatusUpdate('SHIPPED')}
                         disabled={updating}
-                        className="w-full bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50"
+                        className="w-full rounded-lg bg-purple-500 px-4 py-2.5 text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
                       >
-                        {updating ? 'Mise à jour...' : 'Marquer comme expédiée'}
+                        {updating ? 'Mise à jour…' : 'Marquer comme expédiée'}
                       </button>
                     )}
-                    
-                    {/* Annuler - pour commerçants */}
                     {['PENDING', 'CONFIRMED'].includes(order.status || '') && (
                       <button
+                        type="button"
                         onClick={() => handleStatusUpdate('CANCELED')}
                         disabled={updating}
-                        className="w-full bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                        className="w-full rounded-lg bg-red-500 px-4 py-2.5 text-white transition-colors hover:bg-red-600 disabled:opacity-50"
                       >
-                        {updating ? 'Mise à jour...' : 'Annuler la commande'}
+                        {updating ? 'Mise à jour…' : 'Annuler la commande'}
                       </button>
                     )}
-                    
-                    {/* Retour au dashboard marchand */}
                     <button
-                      onClick={() => navigate('/merchant-dashboard')}
-                      className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
+                      type="button"
+                      onClick={() => navigate('/merchant-dashboard?view=orders')}
+                      className="w-full rounded-lg bg-gray-100 px-4 py-2.5 font-medium text-gray-800 transition-colors hover:bg-gray-200"
                     >
                       Retour au tableau de bord
                     </button>
                   </>
                 )}
               </div>
-            </div>
+            </section>
 
-            {/* Chronologie de la commande */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Clock className="mr-2 h-5 w-5 text-orange-500" />
-                Historique
+            <section className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+                <Clock className="h-5 w-5 shrink-0 text-orange-500" />
+                <span>Historique</span>
               </h2>
-              
               <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <Calendar className="h-4 w-4 text-gray-400" />
+                <div className="flex items-start gap-3">
+                  <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
                   <div>
                     <p className="text-sm font-medium text-gray-900">Commande créée</p>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-gray-500">
                       {order.createdAt ? formatDate(order.createdAt) : 'Date inconnue'}
                     </p>
                   </div>
                 </div>
-                
                 {order.updatedAt && order.updatedAt !== order.createdAt && (
-                  <div className="flex items-center space-x-3">
-                    <Edit className="h-4 w-4 text-gray-400" />
+                  <div className="flex items-start gap-3">
+                    <Edit className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Dernière mise à jour</p>
-                      <p className="text-xs text-gray-600">{formatDate(order.updatedAt)}</p>
+                      <p className="text-xs text-gray-500">{formatDate(order.updatedAt)}</p>
                     </div>
                   </div>
                 )}
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { addToCart, createOrderFromCart, removeFromCart, updateCartItem } from "@/services/cartService";
+import { addToCart, createOrderFromCart, removeFromCart, shareCartViaWhatsApp, updateCartItem } from "@/services/cartService";
 import { cartKeys } from "@/lib/query-keys";
 import { orderKeys } from "@/lib/query-keys";
 
@@ -19,7 +19,11 @@ export function useUpdateCartItemMutation() {
   return useMutation({
     mutationFn: ({ itemId, quantity }: { itemId: number; quantity: number }) =>
       updateCartItem(itemId, quantity),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.cart) {
+        queryClient.setQueryData(cartKeys.current(), data.cart);
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: cartKeys.all });
     },
   });
@@ -38,11 +42,18 @@ export function useRemoveCartItemMutation() {
 export function useCreateOrderMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: createOrderFromCart,
+    mutationFn: (message?: string) => createOrderFromCart(message ?? ""),
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cartKeys.all });
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
     },
+  });
+}
+
+export function useShareCartMutation() {
+  return useMutation({
+    mutationFn: (message?: string) => shareCartViaWhatsApp(message ?? ""),
+    retry: false,
   });
 }

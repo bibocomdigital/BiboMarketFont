@@ -9,6 +9,7 @@ import Shops from '@/components/Shops';
 import ProductsGrid from '@/components/ProductsGrid';
 import CallToAction from '@/components/CallToAction';
 import Footer from '@/components/Footer';
+import { HomeAds } from '@/components/home/HomeAds';
 import { ArrowUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -100,7 +101,7 @@ const Index = () => {
         <Header />
         <main className="flex-grow">
           <Hero />
-         
+          <HomeAds />
           <ProductsGrid />
           <Shops hideWhenUnavailable />
          

@@ -20,6 +20,7 @@ export function useLoginMutation() {
     mutationFn: login,
     retry: false,
     onSuccess: (session) => {
+      if (!session.user) return;
       queryClient.setQueryData(userKeys.profile(), session.user);
       queryClient.invalidateQueries({ queryKey: cartKeys.all });
       queryClient.invalidateQueries({ queryKey: orderKeys.all });

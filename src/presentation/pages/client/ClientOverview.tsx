@@ -147,7 +147,7 @@ export function ClientOverview({
             Voir tous les produits
           </button>
         </div>
-        <ProductsGrid />
+        <ProductsGrid hideSearchBar />
       </div>
     </div>
   );

@@ -170,6 +170,26 @@ const RegisterStep1 = ({ form, isSubmitting }: RegisterStep1Props) => {
         />
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-3">
+        {(["city", "department", "commune"] as const).map((name) => (
+          <FormField
+            key={name}
+            control={form.control}
+            name={name}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-[13px] font-medium tracking-wide text-slate-600">
+                  {name === "city" ? "Ville" : name === "department" ? "Département" : "Commune"}
+                </FormLabel>
+                <FormControl>
+                  <Input placeholder="Optionnel" className={fieldClassName} {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        ))}
+      </div>
+
       <Button
         type="submit"
         className={cn(

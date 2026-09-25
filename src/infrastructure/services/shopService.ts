@@ -27,6 +27,7 @@ export interface ShopProduct {
   name: string;
   description: string;
   price: number;
+  promoPrice?: number | null;
   stock: number;
   shopId: number;
   userId?: number;
@@ -58,6 +59,14 @@ export interface Shop {
     id: number;
     name: string;
   };
+  planEndsAt?: string | null;
+  plan?: {
+    id: number;
+    name: string;
+    priceCfa: number;
+    durationDays: number;
+    maxProducts: number;
+  } | null;
   owner?: {
     firstName?: string;
     lastName?: string;
@@ -164,56 +173,40 @@ export const isMerchant = (): boolean => {
  * Récupère les informations de la boutique pour l'utilisateur connecté
  * @returns {Promise<ShopWithProducts>} Les informations de la boutique avec ses produits
  */
-export const getMyShop = async (): Promise<ShopWithProducts> => {
-  try {
-    console.log('🔄 [SHOP] Récupération de la boutique du commerçant');
-    
-    // Vérifier si l'utilisateur est un commerçant
-    if (!isMerchant()) {
-      throw new Error('Seuls les commerçants peuvent accéder à leur boutique');
-    }
-    
-    // Récupérer le token d'authentification
-    const token = getAuthToken();
-    if (!token) {
-      throw new Error('Vous devez être connecté pour accéder à votre boutique');
-    }
-    
-    // Appeler l'API pour récupérer la boutique
-    const response = await fetch(`${backendUrl}/shop/mine`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-    
-    // Vérifier si la réponse est au format texte ou JSON
-    const contentType = response.headers.get('content-type');
-    let errorMessage = 'Erreur lors de la récupération de la boutique';
-    let data;
-    
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-      if (!response.ok) {
-        errorMessage = data.message || errorMessage;
-        if (response.status === 404 || response.status === 403) {
-          throw new Error('Aucune boutique trouvée');
-        }
-        console.error('❌ [SHOP] Erreur lors de la récupération de la boutique:', errorMessage);
-        throw new Error(errorMessage);
-      }
-    } else {
-      const textResponse = await response.text();
-      console.error('❌ [SHOP] Réponse non-JSON:', textResponse);
-      throw new Error(errorMessage);
-    }
-    
-    const shop = mapShopWithProducts(data);
-    console.log('✅ [SHOP] Boutique récupérée avec succès:', shop.name);
-    
-    return shop;
-  } catch (error) {
-    console.error('❌ [SHOP] Erreur:', error);
-    throw error;
+export const getMyShop = async (): Promise<ShopWithProducts | null> => {
+  if (!isMerchant()) {
+    throw new Error('Seuls les commerçants peuvent accéder à leur boutique');
   }
+
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Vous devez être connecté pour accéder à votre boutique');
+  }
+
+  const response = await fetch(`${backendUrl}/shop/mine`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: getAuthHeaders(),
+  });
+
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    throw new Error('Erreur lors de la récupération de la boutique');
+  }
+
+  const data = await response.json();
+  if (!response.ok) {
+    if (response.status === 404 || response.status === 403) {
+      return null;
+    }
+    const message =
+      (data?.error?.message as string | undefined) ||
+      (data?.message as string | undefined) ||
+      'Erreur lors de la récupération de la boutique';
+    throw new Error(message);
+  }
+
+  return mapShopWithProducts(data);
 };
 
 export interface ProdCategory {

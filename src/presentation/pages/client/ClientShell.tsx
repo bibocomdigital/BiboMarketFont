@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Home,
   LayoutDashboard,
@@ -15,6 +15,7 @@ import {
   Search,
   Crown,
   LogOut,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUnreadMessagesQuery } from "@/hooks/queries/use-messages-query";
@@ -80,6 +81,7 @@ type ClientShellProps = {
   roleLabel: string;
   photo?: string | null;
   headerExtra?: React.ReactNode;
+  searchQuery?: string;
   onSearch?: (query: string) => void;
   onPremiumClick?: () => void;
   onProfileClick?: () => void;
@@ -191,13 +193,32 @@ export function ClientShell({
   roleLabel,
   photo,
   headerExtra,
+  searchQuery = "",
   onSearch,
   onPremiumClick,
   onProfileClick,
   children,
 }: ClientShellProps) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(searchQuery);
   const isMessages = section === "messages";
+
+  useEffect(() => {
+    setQuery(searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (query.trim() === searchQuery.trim()) return;
+      onSearch?.(query.trim());
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [query, searchQuery, onSearch]);
+
+  const commitSearch = (value: string) => {
+    const next = value.trim();
+    setQuery(next);
+    onSearch?.(next);
+  };
   const src = photo ? getPhotoUrl(photo) : "";
   const initials = displayName
     .split(/\s+/)
@@ -226,16 +247,41 @@ export function ClientShell({
             className="relative mx-auto hidden min-w-0 max-w-xl flex-1 md:block"
             onSubmit={(event) => {
               event.preventDefault();
-              onSearch?.(query.trim());
+              commitSearch(query);
             }}
           >
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
+              type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Rechercher un produit, une commande, un client..."
-              className="w-full rounded-full border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm text-bibocom-primary outline-none placeholder:text-slate-400 focus:border-bibocom-accent/40 focus:bg-white focus:ring-2 focus:ring-bibocom-accent/15"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  commitSearch("");
+                }
+              }}
+              placeholder="Rechercher un produit..."
+              aria-label="Rechercher un produit"
+              autoComplete="off"
+              className="w-full rounded-full border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-20 text-sm text-bibocom-primary outline-none placeholder:text-slate-400 focus:border-bibocom-accent/40 focus:bg-white focus:ring-2 focus:ring-bibocom-accent/15 [&::-webkit-search-cancel-button]:hidden"
             />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => commitSearch("")}
+                className="absolute right-11 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Effacer la recherche"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-bibocom-accent px-2.5 py-1 text-xs font-semibold text-white hover:bg-bibocom-accent/90"
+            >
+              OK
+            </button>
           </form>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {headerExtra}
@@ -263,17 +309,42 @@ export function ClientShell({
           className="px-4 pb-3 md:hidden"
           onSubmit={(event) => {
             event.preventDefault();
-            onSearch?.(query.trim());
+            commitSearch(query);
           }}
         >
           <div className="relative">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
+              type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Rechercher..."
-              className="w-full rounded-full border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm outline-none placeholder:text-slate-400"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  commitSearch("");
+                }
+              }}
+              placeholder="Rechercher un produit..."
+              aria-label="Rechercher un produit"
+              autoComplete="off"
+              className="w-full rounded-full border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-20 text-sm outline-none placeholder:text-slate-400 focus:border-bibocom-accent/40 focus:bg-white focus:ring-2 focus:ring-bibocom-accent/15 [&::-webkit-search-cancel-button]:hidden"
             />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => commitSearch("")}
+                className="absolute right-11 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Effacer la recherche"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-bibocom-accent px-2.5 py-1 text-xs font-semibold text-white hover:bg-bibocom-accent/90"
+            >
+              OK
+            </button>
           </div>
         </form>
       </header>
@@ -332,7 +403,11 @@ export function ClientShell({
           {!isMessages ? (
             <div className="px-4 pb-2 pt-6 sm:px-6 lg:px-8">
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{TITLES[section]}</h1>
-              {SUBTITLES[section] ? (
+              {section === "products" && searchQuery ? (
+                <p className="mt-1 text-sm text-slate-500">
+                  Résultats pour « {searchQuery} »
+                </p>
+              ) : SUBTITLES[section] ? (
                 <p className="mt-1 text-sm text-slate-500">{SUBTITLES[section]}</p>
               ) : null}
             </div>

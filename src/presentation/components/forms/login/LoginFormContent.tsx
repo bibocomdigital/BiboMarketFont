@@ -18,8 +18,10 @@ import EmailInput from "./EmailInput";
 import PasswordInput from "./PasswordInput";
 import ForgotPasswordDialog from "./ForgotPasswordDialog";
 import SocialLoginButton from "./SocialLoginButton";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useLoginMutation } from "@/hooks/mutations/use-auth-mutations";
+import { completeTwoFactor } from "@/services/authService";
+import { Input } from "@/components/ui/input";
 import { dashboardPathFor } from "@/hooks/use-auth-session";
 import { getUserErrorMessage } from "@domain/errors/app-error";
 import { appAlert } from "@/presentation/lib/swal";
@@ -65,7 +67,9 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
   const [resetIdentifier, setResetIdentifier] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginType, setLoginType] = useState<"email" | "phone">("phone");
-  const navigate = useNavigate();
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [otp, setOtp] = useState("");
+  const [otpPending, setOtpPending] = useState(false);
 
   const form = useForm<z.infer<typeof LoginFormSchema>>({
     resolver: zodResolver(LoginFormSchema),
@@ -125,24 +129,34 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
 
       const response = await loginMutation.mutateAsync(loginData);
 
-      // "Se souvenir de moi" : mettre à jour l'identifiant mémorisé
       if (values.rememberMe) {
         localStorage.setItem(LOGIN_SAVED_KEY, values.login.trim());
       } else {
         localStorage.removeItem(LOGIN_SAVED_KEY);
       }
 
-      navigate(dashboardPathFor(response.user.role));
+      if (response.requiresTwoFactor && response.challenge) {
+        setChallenge(response.challenge);
+        setLoginError(null);
+        return;
+      }
+      if (!response.user) return;
+
+      window.location.replace(dashboardPathFor(response.user.role));
 
       if (onClose) {
         onClose();
       }
     } catch (error) {
-      console.error("❌ [LOGIN] Erreur de connexion:", error);
-
-      const errorMessage = getUserErrorMessage(error);
+      const rawMessage = getUserErrorMessage(error);
+      const errorMessage =
+        rawMessage === "Numéro incorrect"
+          ? "Aucun compte n'utilise ce numéro."
+          : rawMessage === "Email incorrecte"
+            ? "Aucun compte n'utilise cet email."
+            : rawMessage;
       const isCredentialError =
-        /mot de passe|identifiant|email|téléphone|telephone|incorrect|invalide|n'existe|introuvable|unauthorized|401/i.test(
+        /mot de passe|identifiant|email|téléphone|telephone|numéro|numero|compte|incorrect|invalide|n'existe|introuvable|unauthorized|401/i.test(
           errorMessage
         );
 
@@ -154,8 +168,46 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
     }
   };
 
+  const submitOtp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!challenge) return;
+    setOtpPending(true);
+    setLoginError(null);
+    try {
+      const session = await completeTwoFactor(challenge, otp.trim());
+      window.location.replace(dashboardPathFor(session.user.role));
+      onClose?.();
+    } catch (error) {
+      setLoginError(getUserErrorMessage(error));
+    } finally {
+      setOtpPending(false);
+    }
+  };
+
   const fieldClassName =
     "h-12 rounded-xl border-slate-200 bg-white shadow-none transition-all duration-300 focus-visible:ring-bibocom-primary/20 focus-visible:border-bibocom-primary";
+
+  if (challenge) {
+    return (
+      <form onSubmit={submitOtp} className="space-y-5">
+        <p className="text-sm text-slate-600">
+          Saisissez le code à 6 chiffres de votre application d’authentification.
+        </p>
+        <Input
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          value={otp}
+          onChange={(event) => setOtp(event.target.value)}
+          placeholder="000000"
+          className={fieldClassName}
+        />
+        {loginError ? <p className="text-sm text-bibocom-error">{loginError}</p> : null}
+        <Button type="submit" disabled={otpPending || otp.trim().length < 6} className="h-12 w-full rounded-xl bg-bibocom-primary text-white">
+          {otpPending ? "Vérification…" : "Valider le code"}
+        </Button>
+      </form>
+    );
+  }
 
   return (
     <Form {...form}>

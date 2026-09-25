@@ -13,14 +13,18 @@ export enum UserRole {
   CLIENT = 'CLIENT', 
   MERCHANT = 'MERCHANT', 
   SUPPLIER = 'SUPPLIER',
+  MODERATOR = 'MODERATOR',
   ADMIN = 'ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
 }
 
 export const USER_ROLE_LABELS: Record<UserRole, string> = { 
   [UserRole.CLIENT]: 'Client', 
   [UserRole.MERCHANT]: 'Commerçant', 
   [UserRole.SUPPLIER]: 'Fournisseur',
+  [UserRole.MODERATOR]: 'Modérateur',
   [UserRole.ADMIN]: 'Administrateur',
+  [UserRole.SUPER_ADMIN]: 'Super administrateur',
 };
 
 // Interface pour les données utilisateur
@@ -160,6 +164,9 @@ export const registerUser = async (formData: FormData): Promise<{
       lastName: String(formData.get("lastName") ?? ""),
       phoneNumber: String(formData.get("phoneNumber") ?? ""),
       role: String(formData.get("role") ?? "CLIENT"),
+      city: String(formData.get("city") ?? ""),
+      department: String(formData.get("department") ?? ""),
+      commune: String(formData.get("commune") ?? ""),
     };
 
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -349,11 +356,11 @@ export const resendVerificationCode = async (email: string): Promise<{
 /**
  * Connecte un utilisateur existant
  */
-export const login = async (credentials: { email?: string; password: string, phoneNumber?: string }): Promise<{
-  token: string;
-  user: User;
-}> => {
-  try {
+export type LoginResult =
+  | { token: string; user: User; requiresTwoFactor?: false }
+  | { requiresTwoFactor: true; challenge: string; token?: undefined; user?: undefined };
+
+export const login = async (credentials: { email?: string; password: string, phoneNumber?: string }): Promise<LoginResult> => {
     console.log('🔄 [API] Tentative de connexion pour:', credentials.email);
     
     // Désactivation du mode simulation - toujours utiliser l'API réelle
@@ -372,12 +379,14 @@ export const login = async (credentials: { email?: string; password: string, pho
     console.log('📊 [API] Statut de la réponse de connexion:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [API] Erreur de connexion:', errorData);
-      throw new Error(apiErrorMessage(errorData, 'Erreur lors de la connexion'));
+      throw await parseApiError(response, "Erreur lors de la connexion");
     }
 
-    const { token, user } = unwrapAuthSession<User>(await response.json());
+    const payload = unwrapRecord(await response.json());
+    if (payload.requiresTwoFactor === true && typeof payload.challenge === "string") {
+      return { requiresTwoFactor: true, challenge: payload.challenge };
+    }
+    const { token, user } = unwrapAuthSession<User>(payload);
     console.log('✅ [API] Connexion réussie pour:', user.email);
     console.log('👤 [API] Rôle de l\'utilisateur:', user.role);
     
@@ -386,10 +395,26 @@ export const login = async (credentials: { email?: string; password: string, pho
     notifyAuthChanged();
     
     return { token, user };
-  } catch (error) {
-    console.error('❌ [API] Erreur lors de la connexion:', error);
-    throw error;
+};
+
+export const completeTwoFactor = async (
+  challenge: string,
+  code: string,
+): Promise<{ token: string; user: User }> => {
+  const response = await fetch(`${API_URL}/auth/2fa/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge, code }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(errorData, "Code invalide"));
   }
+  const { token, user } = unwrapAuthSession<User>(await response.json());
+  localStorage.setItem("token", token);
+  localStorage.setItem("user", JSON.stringify(user));
+  notifyAuthChanged();
+  return { token, user };
 };
 
 export const loginWithGoogle = async (
@@ -607,11 +632,17 @@ export const requestPasswordReset = async (input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || "Une erreur est survenue");
+    throw await parseApiError(response, "Impossible d'envoyer le code");
   }
-  return data;
+  const data = unwrapRecord(await response.json());
+  return {
+    message: typeof data.message === "string" ? data.message : undefined,
+    status: typeof data.status === "string" ? data.status : undefined,
+    testResetCode: typeof data.testResetCode === "string" ? data.testResetCode : undefined,
+    email: typeof data.email === "string" ? data.email : undefined,
+    phoneNumber: typeof data.phoneNumber === "string" ? data.phoneNumber : undefined,
+  };
 };
 
 export const resetPassword = async (input: {
@@ -630,11 +661,11 @@ export const resetPassword = async (input: {
       newPassword: input.newPassword,
     }),
   });
-  const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || "Une erreur est survenue");
+    throw await parseApiError(response, "Impossible de réinitialiser le mot de passe");
   }
-  return data;
+  const data = unwrapRecord(await response.json());
+  return { message: typeof data.message === "string" ? data.message : undefined };
 };
 
 function requireToken(): string {

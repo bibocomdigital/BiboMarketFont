@@ -12,14 +12,21 @@ export function useCartQuery() {
   const { isAuthenticated, isReady, user } = useAuthSession();
   const enabled = isReady && isAuthenticated && isClientRole(user?.role);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: cartKeys.current(),
     queryFn: () => withTimeout(getCart()),
     enabled,
     staleTime: 15_000,
     refetchInterval: enabled ? 30_000 : false,
     retry: false,
+    placeholderData: undefined,
   });
+
+  if (!enabled) {
+    return { ...query, data: undefined, isPending: false, isError: false, error: null };
+  }
+
+  return query;
 }
 
 export function getCartItemsCount(items: { quantity: number }[] | undefined): number {

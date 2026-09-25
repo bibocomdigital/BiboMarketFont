@@ -18,9 +18,42 @@ import {
 import { getAuthToken } from "@/services/configService";
 import { cartKeys, notificationKeys, orderKeys, userKeys, adminKeys, merchantKeys, messageKeys } from "@/lib/query-keys";
 
+export function hasStoredCredentials(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(localStorage.getItem("token") && localStorage.getItem("user"));
+}
+
+const PRIVATE_PREFIXES = [
+  "/client-dashboard",
+  "/merchant-dashboard",
+  "/admin-dashboard",
+  "/supplier-dashboard",
+  "/profile",
+  "/dashboard/messages",
+  "/commandes-recues",
+  "/notifications",
+  "/verify-phone",
+];
+
+function isPrivatePath(pathname: string): boolean {
+  return PRIVATE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function leavePrivatePageIfLoggedOut() {
+  if (typeof window === "undefined") return;
+  if (!isPrivatePath(window.location.pathname)) return;
+  if (hasStoredCredentials()) return;
+  window.location.replace("/login");
+}
+
 export function dashboardPathFor(role?: string): string {
   const normalized = (role || "").toUpperCase();
-  if (normalized === "ADMIN" || normalized === "ADMINISTRATEUR") {
+  if (
+    normalized === "ADMIN" ||
+    normalized === "ADMINISTRATEUR" ||
+    normalized === "SUPER_ADMIN" ||
+    normalized === "MODERATOR"
+  ) {
     return "/admin-dashboard";
   }
   if (normalized === "MERCHANT" || normalized === "COMMERCANT") {
@@ -45,14 +78,13 @@ function isTokenExpired(token: string | null): boolean {
   return false;
 }
 
-function readSession(): { user: User | null; token: string | null } {
+function readSession(): { user: User | null; token: string | null; stale: boolean } {
   const token = getAuthToken();
   const user = getCurrentUser();
   if (!token || !user || isTokenExpired(token)) {
-    if (token || user) clearStoredSession();
-    return { user: null, token: null };
+    return { user: null, token: null, stale: Boolean(token || user) };
   }
-  return { user, token };
+  return { user, token, stale: false };
 }
 
 type AuthSessionValue = {
@@ -77,25 +109,51 @@ const emptySession: AuthSessionValue = {
 
 export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
-  const [isReady, setIsReady] = useState(typeof window !== "undefined");
-  const [session, setSession] = useState<{ user: User | null; token: string | null }>(() =>
-    typeof window === "undefined" ? { user: null, token: null } : readSession()
-  );
+  const [isReady, setIsReady] = useState(false);
+  const [session, setSession] = useState<{ user: User | null; token: string | null }>({
+    user: null,
+    token: null,
+  });
 
   const hydrate = useCallback(() => {
-    setSession(readSession());
+    const next = readSession();
+    if (next.stale) clearStoredSession();
+    setSession({ user: next.stale ? null : next.user, token: next.stale ? null : next.token });
     setIsReady(true);
   }, []);
 
   useEffect(() => {
     hydrate();
+    const onPageShow = (event: PageTransitionEvent) => {
+      hydrate();
+      if (event.persisted) leavePrivatePageIfLoggedOut();
+    };
+    const onPopState = () => {
+      hydrate();
+      window.setTimeout(leavePrivatePageIfLoggedOut, 0);
+    };
     window.addEventListener(AUTH_CHANGED_EVENT, hydrate);
     window.addEventListener("storage", hydrate);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("popstate", onPopState);
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, hydrate);
       window.removeEventListener("storage", hydrate);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("popstate", onPopState);
     };
   }, [hydrate]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    const isClient =
+      !!session.user &&
+      !!session.token &&
+      String(session.user.role || "").toUpperCase() === "CLIENT";
+    if (!isClient) {
+      queryClient.removeQueries({ queryKey: cartKeys.all });
+    }
+  }, [isReady, session.user, session.token, queryClient]);
 
   const logout = useCallback(() => {
     clearStoredSession();

@@ -4,7 +4,7 @@
 
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
-import { unwrapList, unwrapRecord } from '../api/api-envelope';
+import { apiErrorMessage, unwrapList, unwrapRecord } from '../api/api-envelope';
 
 // Types pour les articles et le panier
 export interface CartItem {
@@ -16,6 +16,7 @@ export interface CartItem {
     id: number;
     name: string;
     price: number;
+    promoPrice?: number | null;
     stock: number;
     images?: { imageUrl: string }[];
   };
@@ -43,6 +44,14 @@ export interface WhatsAppLink {
   orderNumber?: number;
 }
 
+export interface MerchantMessageResult {
+  merchantId: number;
+  shopName: string;
+  messageId?: number;
+  success: boolean;
+  error?: string;
+}
+
 export interface OrderResponse {
   message: string;
   order: {
@@ -51,7 +60,7 @@ export interface OrderResponse {
     status: string;
     createdAt: string;
   };
-  whatsappLinks: WhatsAppLink[];
+  messageResults: MerchantMessageResult[];
 }
 
 export interface AddToCartResponse {
@@ -74,7 +83,21 @@ export interface ClearCartResponse {
 
 export interface ShareCartResponse {
   message: string;
-  whatsappLinks: WhatsAppLink[];
+  results: MerchantMessageResult[];
+  totalMerchants: number;
+}
+
+function unwrapMerchantResults(payload: Record<string, unknown>): MerchantMessageResult[] {
+  return unwrapList(payload, ['results', 'messageResults']).map((row) => {
+    const item = unwrapRecord(row);
+    return {
+      merchantId: Number(item.merchantId),
+      shopName: String(item.shopName ?? 'Boutique'),
+      messageId: item.messageId != null ? Number(item.messageId) : undefined,
+      success: item.success !== false,
+      error: typeof item.error === 'string' ? item.error : undefined,
+    };
+  }).filter((item) => Number.isFinite(item.merchantId));
 }
 
 function emptyCart(): Cart {
@@ -329,48 +352,35 @@ export const clearCart = async (): Promise<ClearCartResponse> => {
 };
 
 /**
- * Partager le panier via WhatsApp
- * @param {string} message - Message additionnel à inclure
- * @returns {Promise<ShareCartResponse>} Réponse avec liens WhatsApp
+ * Envoie une demande de panier aux marchands (messagerie interne).
  */
 export const shareCartViaWhatsApp = async (message: string = ''): Promise<ShareCartResponse> => {
   try {
-    console.log('🔄 [CART] Partage du panier via WhatsApp');
-    console.log('💬 [CART] Message additionnel:', message || 'Aucun');
-    
-    // Vérifier si l'utilisateur est connecté
     if (!isCartAccessible()) {
-      throw new Error('Vous devez être connecté pour partager le panier');
+      throw new Error('Vous devez être connecté pour contacter les vendeurs');
     }
-    
-    // Appeler l'API pour partager le panier
+
     const response = await fetch(`${backendUrl}/cart/share/whatsapp`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ message }),
     });
-    
-    console.log('📊 [CART] Statut de la réponse de partage:', response.status);
-    
+
+    const raw = await response.json();
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [CART] Erreur lors du partage du panier:', errorData);
-      throw new Error(errorData.message || 'Erreur lors du partage du panier');
+      throw new Error(apiErrorMessage(raw, 'Erreur lors du contact des vendeurs'));
     }
-    
-    const payload = unwrapRecord(await response.json());
-    const whatsappLinks = unwrapList(payload, ['whatsappLinks']) as WhatsAppLink[];
-    
-    if (!whatsappLinks.length) {
-      console.error('❌ [CART] Format de réponse invalide:', payload);
-      throw new Error('Format de réponse invalide pour les liens WhatsApp');
+
+    const payload = unwrapRecord(raw);
+    const results = unwrapMerchantResults(payload);
+    if (!results.length) {
+      throw new Error('Aucun vendeur n\'a pu être contacté');
     }
-    
-    console.log('✅ [CART] Liens WhatsApp générés avec succès');
-    
+
     return {
-      message: String(payload.message ?? ''),
-      whatsappLinks,
+      message: String(payload.message ?? 'Messages envoyés aux marchands'),
+      results,
+      totalMerchants: Number(payload.totalMerchants ?? results.length),
     };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);
@@ -379,45 +389,43 @@ export const shareCartViaWhatsApp = async (message: string = ''): Promise<ShareC
 };
 
 /**
- * Créer une commande à partir du panier
- * @param {string} message - Message additionnel à inclure
- * @returns {Promise<OrderResponse>} Réponse avec détails de la commande
+ * Crée une commande à partir du panier et prévient les marchands.
  */
 export const createOrderFromCart = async (message: string = ''): Promise<OrderResponse> => {
   try {
-    console.log('🔄 [CART] Création d\'une commande à partir du panier');
-    console.log('💬 [CART] Message additionnel:', message || 'Aucun');
-    
-    // Vérifier si l'utilisateur est connecté
     if (!isCartAccessible()) {
       throw new Error('Vous devez être connecté pour créer une commande');
     }
-    
-    // Appeler l'API pour créer la commande
+
     const response = await fetch(`${backendUrl}/cart/order`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ message }),
     });
-    
-    console.log('📊 [CART] Statut de la réponse de création de commande:', response.status);
-    
+
+    const raw = await response.json();
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [CART] Erreur lors de la création de la commande:', errorData);
-      throw new Error(errorData.message || 'Erreur lors de la création de la commande');
+      throw new Error(apiErrorMessage(raw, 'Erreur lors de la création de la commande'));
     }
-    
-    const payload = unwrapRecord(await response.json());
-    const order = payload.order as OrderResponse['order'];
-    console.log('✅ [CART] Commande créée avec succès');
-    
+
+    const payload = unwrapRecord(raw);
+    const orderPayload = unwrapRecord(payload.order);
+    const orderId = Number(orderPayload.id);
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      throw new Error('Réponse de commande invalide');
+    }
+
     triggerCartUpdate();
-    
+
     return {
       message: String(payload.message ?? 'Commande créée'),
-      order,
-      whatsappLinks: unwrapList(payload, ['whatsappLinks']) as WhatsAppLink[],
+      order: {
+        id: orderId,
+        totalAmount: Number(orderPayload.totalAmount ?? 0),
+        status: String(orderPayload.status ?? 'PENDING'),
+        createdAt: String(orderPayload.createdAt ?? new Date().toISOString()),
+      },
+      messageResults: unwrapMerchantResults(payload),
     };
   } catch (error) {
     console.error('❌ [CART] Erreur:', error);

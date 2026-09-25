@@ -47,6 +47,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     name: product.name ?? '',
     description: product.description ?? '',
     price: product.price != null ? String(product.price) : '',
+    promoPrice: product.promoPrice != null ? String(product.promoPrice) : '',
     stock: product.stock != null ? String(product.stock) : '',
     category:
       product.categorieProdId != null
@@ -141,6 +142,13 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       setError('Le prix doit être un nombre positif');
       return false;
     }
+    if (formData.promoPrice.trim()) {
+      const promo = parseFloat(formData.promoPrice);
+      if (Number.isNaN(promo) || promo <= 0 || promo >= parseFloat(formData.price)) {
+        setError('Le prix promo doit être inférieur au prix');
+        return false;
+      }
+    }
     if (!formData.stock.trim() || isNaN(parseInt(formData.stock)) || parseInt(formData.stock) < 0) {
       setError('Le stock doit être un nombre positif ou zéro');
       return false;
@@ -166,6 +174,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       payload.append('name', formData.name);
       payload.append('description', formData.description);
       payload.append('price', formData.price);
+      payload.append('promoPrice', formData.promoPrice.trim());
       payload.append('stock', formData.stock);
       payload.append('categorieProdId', formData.category);
       payload.append(
@@ -216,13 +225,13 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative flex h-full items-center justify-center p-4 pointer-events-none">
+      <div className="relative flex h-full items-stretch justify-center sm:items-center sm:p-4 pointer-events-none">
         <div
           role="dialog"
           aria-modal="true"
-          className="pointer-events-auto bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.35)] animate-in fade-in-50 zoom-in-95 duration-300"
+          className="pointer-events-auto flex h-[100dvh] w-full max-w-4xl flex-col overflow-hidden bg-white shadow-[0_8px_30px_rgba(0,0,0,0.35)] animate-in fade-in-50 zoom-in-95 duration-300 sm:h-auto sm:max-h-[90vh] sm:rounded-xl"
         >
-          <div className="flex items-center justify-between p-5 border-b">
+          <div className="flex shrink-0 items-center justify-between border-b p-4 sm:p-5">
             <div className="flex items-center">
               <Package className="h-5 w-5 text-bibocom-accent mr-2" />
               <h2 className="text-xl font-bold text-gray-800">Modifier le produit</h2>
@@ -236,7 +245,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
             </button>
           </div>
 
-          <div className="overflow-y-auto p-5 max-h-[calc(90vh-120px)]">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 flex items-start">
                 <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
@@ -298,6 +307,17 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                       value={formData.price}
                       onChange={handleInputChange}
                       required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="promoPrice">Prix promo (FCFA)</Label>
+                    <Input
+                      id="promoPrice"
+                      type="number"
+                      className="mt-1"
+                      placeholder="Laisser vide hors promo"
+                      value={formData.promoPrice}
+                      onChange={handleInputChange}
                     />
                   </div>
                   <div>
@@ -495,14 +515,19 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
             </div>
           </div>
 
-          <div className="p-5 border-t bg-gray-50 flex justify-between">
-            <Button variant="outline" onClick={onClose} type="button">
+          <div className="flex shrink-0 gap-3 border-t bg-gray-50 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              type="button"
+              className="flex-1 sm:flex-none"
+            >
               Annuler
             </Button>
             <Button
               onClick={submitForm}
               disabled={loading}
-              className="bg-bibocom-accent hover:bg-bibocom-accent/90"
+              className="flex-1 bg-bibocom-accent hover:bg-bibocom-accent/90 sm:flex-none sm:min-w-[9rem]"
               type="button"
             >
               {loading ? 'Enregistrement...' : 'Enregistrer'}

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAdminProduct,
   deleteAdminShop,
+  createAdminUser,
   deleteAdminUser,
   getAdminDashboard,
   getAdminFeedbacks,
@@ -128,6 +129,14 @@ function useInvalidateAdmin() {
     void queryClient.invalidateQueries({ queryKey: adminKeys.all });
     void queryClient.invalidateQueries({ queryKey: shopKeys.categories() });
   };
+}
+
+export function useCreateAdminUserMutation() {
+  const invalidate = useInvalidateAdmin();
+  return useMutation({
+    mutationFn: createAdminUser,
+    onSuccess: invalidate,
+  });
 }
 
 export function usePatchAdminUserMutation() {

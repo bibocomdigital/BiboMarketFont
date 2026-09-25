@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, 
@@ -17,12 +17,14 @@ import {
   CheckCircle
 } from 'lucide-react';
 // Importez les fonctions du service
-import { shareCartViaWhatsApp } from '@/services/cartService';
+import { updateCartItem } from '@/services/cartService';
+import { chargedPrice, ProductPrice } from '@/components/product/ProductPrice';
 import { getUserErrorMessage } from '@domain/errors/app-error';
 import { useCartQuery } from '@/hooks/queries/use-cart-query';
 import {
   useCreateOrderMutation,
   useRemoveCartItemMutation,
+  useShareCartMutation,
   useUpdateCartItemMutation,
 } from '@/hooks/mutations/use-cart-mutations';
 
@@ -58,6 +60,8 @@ const CartPage = () => {
   const updateItemMutation = useUpdateCartItemMutation();
   const removeItemMutation = useRemoveCartItemMutation();
   const createOrderMutation = useCreateOrderMutation();
+  const shareCartMutation = useShareCartMutation();
+  const actionBusy = createOrderMutation.isPending || shareCartMutation.isPending;
   const cartItems = cart?.items || [];
   const loading = isPending && !cart;
   const [actionError, setActionError] = useState(null);
@@ -69,63 +73,123 @@ const CartPage = () => {
   const [promoError, setPromoError] = useState('');
   const [promoSuccess, setPromoSuccess] = useState('');
   const [applyingPromo, setApplyingPromo] = useState(false);
-  
+  const [localQty, setLocalQty] = useState<Record<number, number>>({});
+  const latestQty = useRef<Record<number, number>>({});
+  const saveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  const quantityOf = (item: { id: number; quantity: number }) =>
+    localQty[item.id] ?? item.quantity;
+
   // États pour le panier
   const shippingFee = 0;
   const calculatedSubtotal = cartItems.reduce((sum, item) => {
-    return sum + (item.product.price * item.quantity);
+    return sum + chargedPrice(item.product.price, item.product.promoPrice) * quantityOf(item);
   }, 0);
   const subtotal = calculatedSubtotal;
-  const total = Math.max(0, (cart?.totalPrice || calculatedSubtotal) - discount);
+  const total = Math.max(0, calculatedSubtotal - discount);
   const [refreshing, setRefreshing] = useState(false);
   
   // État pour le toast
   const [toast, setToast] = useState(null);
-  
+
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimers.current).forEach(clearTimeout);
+      Object.entries(latestQty.current).forEach(([itemId, quantity]) => {
+        if (quantity != null) {
+          void updateCartItem(Number(itemId), quantity);
+        }
+      });
+    };
+  }, []);
+
   const refreshCart = async () => {
     setRefreshing(true);
     setActionError(null);
     await refetch();
     setRefreshing(false);
   };
-  
-  const updateCartItemQuantity = async (id, newQuantity) => {
+
+  const persistQuantity = async (id: number) => {
+    const quantity = latestQty.current[id];
+    if (quantity == null) return;
     try {
-      await updateItemMutation.mutateAsync({ itemId: id, quantity: newQuantity });
+      await updateItemMutation.mutateAsync({ itemId: id, quantity });
+      if (latestQty.current[id] === quantity) {
+        delete latestQty.current[id];
+      }
+      setLocalQty((prev) => {
+        if (prev[id] !== quantity) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     } catch (err) {
       console.error('Erreur lors de la mise à jour de la quantité:', err);
       setActionError('Erreur lors de la mise à jour. Veuillez réessayer.');
+      setLocalQty((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      delete latestQty.current[id];
       await refreshCart();
     }
   };
-  
-  // Fonction pour augmenter la quantité
-  const increaseQuantity = (id, event) => {
-    // Empêcher le comportement par défaut
-    if (event) event.preventDefault();
-    
-    const item = cartItems.find(item => item.id === id);
-    if (item && !updateItemMutation.isPending) {
-      updateCartItemQuantity(id, item.quantity + 1);
-    }
+
+  const schedulePersist = (id: number) => {
+    if (saveTimers.current[id]) clearTimeout(saveTimers.current[id]);
+    saveTimers.current[id] = setTimeout(() => {
+      void persistQuantity(id);
+    }, 450);
   };
-  
-  // Fonction pour diminuer la quantité
-  const decreaseQuantity = (id, event) => {
-    // Empêcher le comportement par défaut
-    if (event) event.preventDefault();
-    
-    const item = cartItems.find(item => item.id === id);
-    if (item && item.quantity > 1 && !updateItemMutation.isPending) {
-      updateCartItemQuantity(id, item.quantity - 1);
-    }
+
+  const flushPendingQuantities = async () => {
+    const ids = Object.keys(saveTimers.current).map(Number);
+    ids.forEach((id) => {
+      if (saveTimers.current[id]) {
+        clearTimeout(saveTimers.current[id]);
+        delete saveTimers.current[id];
+      }
+    });
+    const pending = Object.keys(latestQty.current).map(Number);
+    await Promise.all(pending.map((id) => persistQuantity(id)));
   };
+
+  const changeQuantity = (id: number, delta: number, event?: React.MouseEvent) => {
+    if (event) event.preventDefault();
+    const item = cartItems.find((entry) => entry.id === id);
+    if (!item) return;
+    const current = quantityOf(item);
+    const stock = Number(item.product.stock);
+    const max = Number.isFinite(stock) && stock > 0 ? stock : Number.POSITIVE_INFINITY;
+    const next = Math.max(1, Math.min(current + delta, max));
+    if (next === current) return;
+    latestQty.current[id] = next;
+    setLocalQty((prev) => ({ ...prev, [id]: next }));
+    schedulePersist(id);
+  };
+
+  const increaseQuantity = (id, event) => changeQuantity(id, 1, event);
+
+  const decreaseQuantity = (id, event) => changeQuantity(id, -1, event);
   
   // Fonction pour supprimer un article
   const removeItem = async (id, event) => {
     // Empêcher le comportement par défaut
     if (event) event.preventDefault();
-    
+    if (saveTimers.current[id]) {
+      clearTimeout(saveTimers.current[id]);
+      delete saveTimers.current[id];
+    }
+    delete latestQty.current[id];
+    setLocalQty((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
     try {
       await removeItemMutation.mutateAsync(id);
     } catch (err) {
@@ -135,61 +199,65 @@ const CartPage = () => {
     }
   };
   
-  // Fonction pour partager le panier via WhatsApp
-  const shareCartViaWhatsAppAndNavigate = async (event) => {
+  const contactSellers = async (event) => {
     if (event) event.preventDefault();
-    
+    if (actionBusy) return;
+
     if (cartItems.length === 0) {
       setActionError('Votre panier est vide. Veuillez ajouter des articles avant de contacter un vendeur.');
       return;
     }
-    
+
     try {
       setActionError(null);
-      
-      // Message optionnel
-      const message = "J'aimerais discuter de ma commande. Merci!";
-      
-      // Appel au service pour générer les liens WhatsApp
-      const result = await shareCartViaWhatsApp(message);
-      
-      // Naviguer vers la page WhatsApp avec les liens
-      navigate('/whatsapp-links', { state: { links: result.whatsappLinks } });
-      
+      await flushPendingQuantities();
+      const result = await shareCartMutation.mutateAsync(
+        "J'aimerais discuter de ma commande. Merci!",
+      );
+      const sent = result.results.filter((item) => item.success);
+      if (!sent.length) {
+        throw new Error(result.results[0]?.error || 'Impossible de contacter les vendeurs');
+      }
+
+      setToast({
+        message: sent.length === 1
+          ? `Message envoyé à ${sent[0].shopName}`
+          : `Messages envoyés à ${sent.length} vendeurs`,
+        type: 'success',
+      });
+      navigate(`/client-dashboard?view=messages&partner=${sent[0].merchantId}`);
     } catch (err) {
-      console.error('Erreur lors du partage du panier:', err);
-      setActionError('Impossible de partager le panier. Veuillez réessayer.');
+      console.error('Erreur lors du contact des vendeurs:', err);
+      const message = getUserErrorMessage(err) || 'Impossible de contacter les vendeurs. Veuillez réessayer.';
+      setActionError(message);
+      setToast({ message, type: 'error' });
     }
   };
-  
-  // Fonction pour passer la commande
+
   const placeOrder = async (event) => {
     if (event) event.preventDefault();
-    
+    if (actionBusy) return;
+
     if (cartItems.length === 0) {
       setActionError('Votre panier est vide. Veuillez ajouter des articles avant de passer commande.');
       return;
     }
-    
+
     try {
       setActionError(null);
-      await createOrderMutation.mutateAsync();
-      
-      // Afficher le toast de confirmation
+      await flushPendingQuantities();
+      const result = await createOrderMutation.mutateAsync();
+
       setToast({
-        message: 'Votre commande a été créée avec succès!',
-        type: 'success'
+        message: `Commande #${result.order.id} créée. Les vendeurs ont été prévenus.`,
+        type: 'success',
       });
-      
+      navigate(`/commandes/${result.order.id}`);
     } catch (err) {
       console.error('Erreur lors de la création de la commande:', err);
-      setActionError('Impossible de créer la commande. Veuillez réessayer.');
-      
-      // Afficher un toast d'erreur
-      setToast({
-        message: 'Erreur lors de la création de la commande. Veuillez réessayer.',
-        type: 'error'
-      });
+      const message = getUserErrorMessage(err) || 'Impossible de créer la commande. Veuillez réessayer.';
+      setActionError(message);
+      setToast({ message, type: 'error' });
     }
   };
   
@@ -234,7 +302,9 @@ const CartPage = () => {
   
   // Formater un prix en FCFA
   const formatPrice = (price) => {
-    return `${price.toLocaleString()} FCFA`;
+    const n = Number(price);
+    if (!Number.isFinite(n)) return '—';
+    return `${Math.round(n).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ')} FCFA`;
   };
   
   return (
@@ -329,96 +399,116 @@ const CartPage = () => {
                 
                 {/* Articles du panier */}
                 <div className="divide-y divide-gray-100">
-                  {cartItems.map(item => (
-                    <div key={item.id} className="p-6 flex flex-col md:flex-row items-start md:items-center">
-                      {/* Image produit */}
-                      <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 mb-4 md:mb-0">
+                  {cartItems.map(item => {
+                    const qty = quantityOf(item);
+                    const atMin = qty <= 1;
+                    const atMax = Boolean(item.product.stock) && qty >= item.product.stock;
+                    return (
+                    <div key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:gap-4 sm:p-6">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:h-24 sm:w-24">
                         {item.product.images && item.product.images.length > 0 ? (
                           <img
                             src={item.product.images[0].imageUrl || '/placeholder-image.jpg'}
                             alt={item.product.name || 'Produit'}
-                            className="w-full h-full object-cover"
+                            className="h-full w-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-400">
+                          <div className="flex h-full w-full items-center justify-center bg-gray-200 text-gray-400">
                             <Package size={24} />
                           </div>
                         )}
                       </div>
-                      
-                      {/* Détails produit */}
-                      <div className="flex-1 px-4">
-                        <h3 className="font-medium text-gray-800 mb-1">{item.product.name}</h3>
-                        <p className="text-sm text-gray-500 mb-3">
-                          {item.product.name}
-                        </p>
-                        <div className="flex items-center justify-between">
-                          {/* Contrôle de quantité */}
-                          <div className="flex items-center border border-gray-200 rounded-md overflow-hidden">
-                            <button 
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="break-words font-medium text-gray-800">{item.product.name}</h3>
+                            {item.product.description && item.product.description !== item.product.name && (
+                              <p className="mt-0.5 line-clamp-2 text-sm text-gray-500">
+                                {item.product.description}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => removeItem(item.id, e)}
+                            disabled={removeItemMutation.isPending}
+                            className={`shrink-0 rounded-full p-2 transition-colors ${
+                              removeItemMutation.isPending
+                                ? 'cursor-not-allowed text-gray-400'
+                                : 'text-red-500 hover:bg-red-50'
+                            }`}
+                            type="button"
+                            aria-label="Supprimer l'article"
+                          >
+                            {removeItemMutation.isPending ? (
+                              <Loader size={18} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={18} />
+                            )}
+                          </button>
+                        </div>
+
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="inline-flex w-fit shrink-0 items-center overflow-hidden rounded-lg border border-gray-200">
+                            <button
                               onClick={(e) => decreaseQuantity(item.id, e)}
-                              disabled={updateItemMutation.isPending || item.quantity <= 1}
-                              className={`px-3 py-1 ${
-                                updateItemMutation.isPending || item.quantity <= 1 
-                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                  : 'bg-gray-50 hover:bg-gray-100 transition-colors'
+                              disabled={atMin}
+                              className={`flex h-10 w-10 items-center justify-center ${
+                                atMin
+                                  ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                                  : 'bg-gray-50 hover:bg-gray-100'
                               }`}
                               type="button"
+                              aria-label="Diminuer la quantité"
                             >
                               <Minus size={16} />
                             </button>
-                            <span className="px-4 py-1 font-medium">
-                              {updateItemMutation.isPending ? (
-                                <Loader size={16} className="animate-spin" />
-                              ) : (
-                                item.quantity
-                              )}
+                            <span className="flex h-10 min-w-[2.75rem] items-center justify-center border-x border-gray-200 px-2 text-center font-semibold tabular-nums">
+                              {qty}
                             </span>
-                            <button 
+                            <button
                               onClick={(e) => increaseQuantity(item.id, e)}
-                              disabled={updateItemMutation.isPending || (item.product.stock && item.quantity >= item.product.stock)}
-                              className={`px-3 py-1 ${
-                                updateItemMutation.isPending || (item.product.stock && item.quantity >= item.product.stock)
-                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                  : 'bg-gray-50 hover:bg-gray-100 transition-colors'
+                              disabled={atMax}
+                              className={`flex h-10 w-10 items-center justify-center ${
+                                atMax
+                                  ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                                  : 'bg-gray-50 hover:bg-gray-100'
                               }`}
                               type="button"
+                              aria-label="Augmenter la quantité"
                             >
                               <Plus size={16} />
                             </button>
                           </div>
-                          
-                          {/* Prix */}
-                          <div className="font-medium">
-                            {formatPrice(item.product.price * item.quantity)}
-                            {item.quantity > 1 && (
-                              <span className="text-xs text-gray-500 ml-1">
-                                ({formatPrice(item.product.price)} pièce)
-                              </span>
+
+                          <div className="sm:text-right">
+                            <div className="font-semibold text-gray-900">
+                              <ProductPrice
+                                price={item.product.price * qty}
+                                promoPrice={
+                                  item.product.promoPrice != null
+                                    ? item.product.promoPrice * qty
+                                    : null
+                                }
+                                size="sm"
+                              />
+                            </div>
+                            {qty > 1 && (
+                              <div className="text-xs text-gray-500">
+                                <ProductPrice
+                                  price={item.product.price}
+                                  promoPrice={item.product.promoPrice}
+                                  size="sm"
+                                />
+                                {" "}/ pièce
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
-                      
-                      {/* Bouton supprimer */}
-                      <button 
-                        onClick={(e) => removeItem(item.id, e)}
-                        disabled={removeItemMutation.isPending}
-                        className={`mt-4 md:mt-0 p-2 rounded-full transition-colors ${
-                          removeItemMutation.isPending 
-                            ? 'text-gray-400 cursor-not-allowed' 
-                            : 'text-red-500 hover:bg-red-50'
-                        }`}
-                        type="button"
-                      >
-                        {removeItemMutation.isPending ? (
-                          <Loader size={18} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={18} />
-                        )}
-                      </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
               
@@ -496,30 +586,39 @@ const CartPage = () => {
                 {/* Boutons d'action */}
                 <button 
                   onClick={placeOrder}
-                  disabled={loading || cartItems.length === 0}
+                  disabled={actionBusy || cartItems.length === 0}
                   className="block w-full py-3 bg-orange-500 text-white text-center rounded-lg hover:bg-orange-600 transition-colors mb-3 disabled:bg-orange-300"
+                  type="button"
                 >
-                  {loading ? (
+                  {createOrderMutation.isPending ? (
                     <span className="flex items-center justify-center gap-2">
                       <Loader size={18} className="animate-spin" />
-                      Traitement en cours...
+                      Création de la commande...
                     </span>
                   ) : (
                     'Passer la commande'
                   )}
                 </button>
                 
-                {/* Bouton WhatsApp */}
                 <button 
-                  onClick={shareCartViaWhatsAppAndNavigate}
-                  disabled={loading || cartItems.length === 0}
+                  onClick={contactSellers}
+                  disabled={actionBusy || cartItems.length === 0}
                   className="block w-full py-3 mb-3 bg-green-500 text-white text-center rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2 disabled:bg-green-300"
                   type="button"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="mr-1">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                  </svg>
-                  <span>Contacter les vendeurs</span>
+                  {shareCartMutation.isPending ? (
+                    <>
+                      <Loader size={18} className="animate-spin" />
+                      <span>Envoi des messages...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="mr-1">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                      </svg>
+                      <span>Contacter les vendeurs</span>
+                    </>
+                  )}
                 </button>
                 
                 {/* Informations supplémentaires */}

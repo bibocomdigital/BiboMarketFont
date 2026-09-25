@@ -111,6 +111,10 @@ const VerifyCode = () => {
           password: userPassword
         });
         
+        if (!loginResult.user) {
+          navigate("/login", { replace: true });
+          return;
+        }
         console.log('✅ [VERIFY] Connexion automatique réussie!', loginResult);
         console.log('👤 [VERIFY] Rôle de l\'utilisateur connecté:', loginResult.user.role);
         

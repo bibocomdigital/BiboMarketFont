@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getUserErrorMessage } from "@domain/errors/app-error";
 import { useToast } from "@/hooks/use-toast";
-import { formatFcfa, productStatusLabel } from "@/lib/admin-analytics";
+import { productStatusLabel } from "@/lib/admin-analytics";
+import { ProductPrice } from "@/components/product/ProductPrice";
 import { formatImageUrl, type Product } from "@/services/productService";
 import {
   useMerchantCatalogQuery,
@@ -42,6 +44,7 @@ export function MerchantProductsView({
   onShopCreated: () => void;
 }) {
   const { toast } = useToast();
+  const [, setSearchParams] = useSearchParams();
   const { isAuthenticated, user } = useAuthSession();
   const [page, setPage] = useState(1);
   const [draft, setDraft] = useState("");
@@ -62,6 +65,7 @@ export function MerchantProductsView({
       text: `"${product.name}" sera définitivement supprimé, ainsi que ses images et sa vidéo.`,
       confirmText: "Supprimer",
       cancelText: "Annuler",
+      danger: true,
     });
     if (!confirmed) return;
     try {
@@ -171,8 +175,11 @@ export function MerchantProductsView({
                           <span className="max-w-[220px] truncate font-medium">{product.name}</span>
                         </div>
                       </Td>
-                      <Td>{formatFcfa(product.price)}</Td>
-                      <Td>{product.stock}</Td>
+                      <Td><ProductPrice price={product.price} promoPrice={product.promoPrice} size="sm" /></Td>
+                      <Td className={product.stock < 10 ? "font-medium text-amber-600" : undefined}>
+                        {product.stock}
+                        {product.stock < 10 ? " · bas" : ""}
+                      </Td>
                       <Td>{productStatusLabel(product.status)}</Td>
                       <Td>
                         <div className="flex flex-wrap items-center gap-2">
@@ -196,6 +203,13 @@ export function MerchantProductsView({
                           </GhostButton>
                           <GhostButton onClick={() => setPreviewProduct(product)}>
                             Voir
+                          </GhostButton>
+                          <GhostButton
+                            onClick={() =>
+                              setSearchParams({ view: "comptoir", product: String(product.id) })
+                            }
+                          >
+                            Stock
                           </GhostButton>
                           <GhostButton onClick={() => setEditProduct(product)}>
                             Modifier
@@ -233,8 +247,10 @@ export function MerchantProductsView({
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm">
-                    <span className="font-medium">{formatFcfa(product.price)}</span>
-                    <span className="text-slate-500">Stock : {product.stock}</span>
+                    <ProductPrice price={product.price} promoPrice={product.promoPrice} size="sm" />
+                    <span className={product.stock < 10 ? "font-medium text-amber-600" : "text-slate-500"}>
+                      Stock : {product.stock}{product.stock < 10 ? " · bas" : ""}
+                    </span>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <GhostButton
@@ -256,6 +272,13 @@ export function MerchantProductsView({
                       {nextStatus === "PUBLISHED" ? "Publier" : "Mettre en brouillon"}
                     </GhostButton>
                     <GhostButton onClick={() => setPreviewProduct(product)}>Voir</GhostButton>
+                    <GhostButton
+                      onClick={() =>
+                        setSearchParams({ view: "comptoir", product: String(product.id) })
+                      }
+                    >
+                      Stock
+                    </GhostButton>
                     <GhostButton onClick={() => setEditProduct(product)}>Modifier</GhostButton>
                     <GhostButton
                       disabled={deleteProduct.isPending}

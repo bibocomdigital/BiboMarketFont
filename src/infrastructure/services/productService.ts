@@ -39,6 +39,7 @@ export interface Product {
   name: string;
   description: string;
   price: number;
+  promoPrice?: number | null;
   stock: number;
   category?: string | ProductCategoryRef;
   categorieProdId?: number;
@@ -441,6 +442,62 @@ export const updateProductStock = async (productId: number, newStock: number): P
     throw error;
   }
 };
+
+export type StockAdjustKind = "RECEPTION" | "COMPTOIR" | "INVENTAIRE";
+
+export type StockMovementRow = {
+  id: number;
+  kind: StockAdjustKind | "COMMANDE" | "ANNULATION";
+  quantity: number;
+  delta: number;
+  stockAfter: number;
+  note?: string | null;
+  orderId?: number | null;
+  createdAt: string;
+  product: { id: number; name: string };
+};
+
+export type CounterDesk = {
+  sales: Array<{
+    id: number;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    note?: string | null;
+    createdAt: string;
+    product: { id: number; name: string };
+  }>;
+  today: { count: number; quantity: number; total: number };
+};
+
+async function authedJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Vous devez être connecté");
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  if (init?.body) headers.set("Content-Type", "application/json");
+  const response = await fetch(`${backendUrl}${path}`, { ...init, headers });
+  if (!response.ok) throw await parseApiError(response, "Erreur");
+  return unwrapApi(await response.json()) as T;
+}
+
+export function adjustProductStock(
+  productId: number,
+  body: { kind: StockAdjustKind; quantity: number; note?: string },
+) {
+  return authedJson<{ stock: number }>(`/produit/${productId}/mouvement`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function listStockMovements() {
+  return authedJson<StockMovementRow[]>("/produit/mouvements");
+}
+
+export function listCounterSales() {
+  return authedJson<CounterDesk>("/produit/comptoir");
+}
 
 /**
  * Supprime un produit

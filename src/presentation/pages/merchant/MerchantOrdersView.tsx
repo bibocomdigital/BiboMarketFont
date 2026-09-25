@@ -14,7 +14,9 @@ import { merchantOrderItems, type MerchantOrder } from "@/services/merchantServi
 import { useMerchantOrdersQuery } from "@/hooks/queries/use-orders-query";
 import { useUpdateOrderStatusMutation } from "@/hooks/mutations/use-order-mutations";
 import NoShop from "@/components/shop/NoShop";
+import { confirmAction } from "@/components/feedback/confirm-dialog";
 import {
+  AccentButton,
   ConfirmBar,
   GhostButton,
   MerchantInput,
@@ -31,15 +33,141 @@ function asMerchantOrders(raw: unknown): MerchantOrder[] {
   return Array.isArray(raw) ? (raw as MerchantOrder[]) : [];
 }
 
+function clientIdOf(order: MerchantOrder) {
+  const id = Number(order.client?.id || order.clientId);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+type StatusAction = {
+  status: "CONFIRMED" | "SHIPPED" | "CANCELED";
+  label: string;
+  danger?: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+};
+
+function statusActions(status: string): StatusAction[] {
+  const current = String(status).toUpperCase();
+  if (current === "PENDING") {
+    return [
+      {
+        status: "CONFIRMED",
+        label: "Confirmer",
+        title: "Confirmer cette commande ?",
+        description: "Le client sera informé que vous acceptez la commande.",
+        confirmLabel: "Confirmer",
+      },
+      {
+        status: "CANCELED",
+        label: "Annuler",
+        danger: true,
+        title: "Annuler cette commande ?",
+        description: "Le client sera informé. Cette action est définitive.",
+        confirmLabel: "Oui, annuler",
+      },
+    ];
+  }
+  if (current === "CONFIRMED") {
+    return [
+      {
+        status: "SHIPPED",
+        label: "Expédier",
+        title: "Marquer comme expédiée ?",
+        description: "Le client verra que sa commande est en cours de livraison.",
+        confirmLabel: "Expédier",
+      },
+      {
+        status: "CANCELED",
+        label: "Annuler",
+        danger: true,
+        title: "Annuler cette commande ?",
+        description: "Le client sera informé. Cette action est définitive.",
+        confirmLabel: "Oui, annuler",
+      },
+    ];
+  }
+  return [];
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const current = String(status).toUpperCase();
+  const tone =
+    current === "PENDING"
+      ? "bg-amber-50 text-amber-700"
+      : current === "CONFIRMED"
+        ? "bg-sky-50 text-sky-700"
+        : current === "SHIPPED"
+          ? "bg-violet-50 text-violet-700"
+          : current === "DELIVERED"
+            ? "bg-emerald-50 text-emerald-700"
+            : current === "CANCELED"
+              ? "bg-red-50 text-red-600"
+              : "bg-slate-100 text-slate-500";
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${tone}`}>
+      {orderStatusLabel(status)}
+    </span>
+  );
+}
+
+function OrderActions({
+  order,
+  busy,
+  onStatus,
+  onMessage,
+}: {
+  order: MerchantOrder;
+  busy: boolean;
+  onStatus: (order: MerchantOrder, action: StatusAction) => void;
+  onMessage?: (clientId: number) => void;
+}) {
+  const actions = statusActions(order.status);
+  const clientId = clientIdOf(order);
+  if (actions.length === 0 && !clientId) {
+    return <span className="text-slate-400">—</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {actions.map((action) =>
+        action.danger ? (
+          <button
+            key={action.status}
+            type="button"
+            disabled={busy}
+            onClick={() => onStatus(order, action)}
+            className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-40"
+          >
+            {action.label}
+          </button>
+        ) : (
+          <AccentButton key={action.status} disabled={busy} onClick={() => onStatus(order, action)}>
+            {action.label}
+          </AccentButton>
+        ),
+      )}
+      {onMessage && clientId ? (
+        <GhostButton disabled={busy} onClick={() => onMessage(clientId)}>
+          Écrire
+        </GhostButton>
+      ) : null}
+    </div>
+  );
+}
+
 export function MerchantOrderDialog({
   order,
+  busy,
   onClose,
+  onStatus,
+  onMessage,
 }: {
   order: MerchantOrder | null;
+  busy: boolean;
   onClose: () => void;
+  onStatus: (order: MerchantOrder, action: StatusAction) => void;
+  onMessage?: (clientId: number) => void;
 }) {
-  const { toast } = useToast();
-  const patchStatus = useUpdateOrderStatusMutation();
   if (!order) return null;
   const items = merchantOrderItems(order);
 
@@ -48,31 +176,16 @@ export function MerchantOrderDialog({
       title={`Commande #${order.id}`}
       message={
         <div className="space-y-3">
-          <p>
-            {fullName(order.client)} · {formatFcfa(order.totalAmount)}
-          </p>
-          <MerchantSelect
-            value={String(order.status)}
-            onChange={(event) =>
-              patchStatus.mutate(
-                { orderId: order.id, status: event.target.value },
-                {
-                  onError: (error) =>
-                    toast({
-                      title: "Statut non mis à jour",
-                      description: getUserErrorMessage(error),
-                      variant: "destructive",
-                    }),
-                }
-              )
-            }
-          >
-            {ORDER_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {orderStatusLabel(status)}
-              </option>
-            ))}
-          </MerchantSelect>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={order.status} />
+            <span>
+              {fullName(order.client)}
+              {order.client?.phoneNumber ? ` · ${order.client.phoneNumber}` : ""}
+              {" · "}
+              {formatFcfa(order.totalAmount)}
+            </span>
+          </div>
+          <OrderActions order={order} busy={busy} onStatus={onStatus} onMessage={onMessage} />
           <ul className="space-y-2">
             {items.length === 0 ? (
               <li className="text-slate-400">Aucun article de votre boutique.</li>
@@ -117,11 +230,35 @@ export function MerchantOrdersView({
   const orders = asMerchantOrders(query.data);
   const selected = orders.find((order) => order.id === selectedOrderId) || null;
 
+  const requestStatus = async (order: MerchantOrder, action: StatusAction) => {
+    const accepted = await confirmAction({
+      title: action.title,
+      description: action.description,
+      confirmLabel: action.confirmLabel,
+      cancelLabel: "Retour",
+      variant: action.danger ? "danger" : "default",
+    });
+    if (!accepted) return;
+    patchStatus.mutate(
+      { orderId: order.id, status: action.status },
+      {
+        onError: (error) =>
+          toast({
+            title: "Statut non mis à jour",
+            description: getUserErrorMessage(error),
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return orders.filter((order) => {
       const client = fullName(order.client).toLowerCase();
-      const matchesSearch = !term || client.includes(term) || String(order.id).includes(term);
+      const phone = String(order.client?.phoneNumber || "").toLowerCase();
+      const matchesSearch =
+        !term || client.includes(term) || phone.includes(term) || String(order.id).includes(term);
       const matchesStatus = !status || String(order.status).toUpperCase() === status;
       return matchesSearch && matchesStatus;
     });
@@ -166,12 +303,13 @@ export function MerchantOrdersView({
           <StateMessage>Aucune commande trouvée.</StateMessage>
         ) : (
           <>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-full">
+          <div className="hidden overflow-x-auto lg:block">
+            <table className="min-w-[920px] w-full">
               <thead>
                 <tr className="border-b border-slate-100">
                   <Th>N°</Th>
                   <Th>Client</Th>
+                  <Th>Téléphone</Th>
                   <Th>Articles</Th>
                   <Th>Montant</Th>
                   <Th>Statut</Th>
@@ -182,49 +320,37 @@ export function MerchantOrdersView({
               <tbody>
                 {filtered.map((order) => {
                   const items = merchantOrderItems(order);
+                  const phone = order.client?.phoneNumber;
                   return (
                     <tr key={order.id} className="border-b border-slate-100 last:border-0">
                       <Td>
                         <GhostButton onClick={() => onSelectOrder(order.id)}>#{order.id}</GhostButton>
                       </Td>
                       <Td>{fullName(order.client)}</Td>
-                      <Td className="max-w-[240px] truncate">
+                      <Td>
+                        {phone ? (
+                          <a href={`tel:${phone}`} className="text-bibocom-accent hover:underline">
+                            {phone}
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">Non renseigné</span>
+                        )}
+                      </Td>
+                      <Td className="max-w-[220px] truncate">
                         {items.map((item) => item.product?.name || "Produit").join(", ") || "—"}
                       </Td>
                       <Td>{formatFcfa(order.totalAmount)}</Td>
                       <Td>
-                        <MerchantSelect
-                          value={String(order.status)}
-                          onChange={(event) =>
-                            patchStatus.mutate(
-                              { orderId: order.id, status: event.target.value },
-                              {
-                                onError: (error) =>
-                                  toast({
-                                    title: "Statut non mis à jour",
-                                    description: getUserErrorMessage(error),
-                                    variant: "destructive",
-                                  }),
-                              }
-                            )
-                          }
-                        >
-                          {ORDER_STATUSES.map((item) => (
-                            <option key={item} value={item}>
-                              {orderStatusLabel(item)}
-                            </option>
-                          ))}
-                        </MerchantSelect>
+                        <StatusBadge status={order.status} />
                       </Td>
                       <Td>{formatDateFr(order.createdAt)}</Td>
-                      <Td>
-                        {onMessageClient && Number(order.client?.id || order.clientId) ? (
-                          <GhostButton onClick={() => onMessageClient(Number(order.client?.id || order.clientId))}>
-                            Écrire
-                          </GhostButton>
-                        ) : (
-                          "—"
-                        )}
+                      <Td className="whitespace-normal">
+                        <OrderActions
+                          order={order}
+                          busy={patchStatus.isPending}
+                          onStatus={(current, action) => void requestStatus(current, action)}
+                          onMessage={onMessageClient}
+                        />
                       </Td>
                     </tr>
                   );
@@ -232,55 +358,55 @@ export function MerchantOrdersView({
               </tbody>
             </table>
           </div>
-          <div className="space-y-3 p-3 md:hidden">
+          <div className="space-y-3 p-3 lg:hidden">
             {filtered.map((order) => {
               const items = merchantOrderItems(order);
+              const phone = order.client?.phoneNumber;
               return (
                 <MobileCard key={order.id}>
                   <div className="flex items-center justify-between gap-3">
                     <GhostButton onClick={() => onSelectOrder(order.id)}>#{order.id}</GhostButton>
                     <span className="text-xs text-slate-400">{formatDateFr(order.createdAt)}</span>
                   </div>
-                  <p className="mt-3 text-sm font-medium">{fullName(order.client)}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {items.map((item) => item.product?.name || "Produit").join(", ") || "—"}
-                  </p>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-xs text-slate-400">Client</dt>
+                      <dd className="min-w-0 text-right font-medium">{fullName(order.client)}</dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-xs text-slate-400">Téléphone</dt>
+                      <dd className="min-w-0 break-all text-right">
+                        {phone ? (
+                          <a href={`tel:${phone}`} className="font-medium text-bibocom-accent">
+                            {phone}
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">Non renseigné</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-xs text-slate-400">Articles</dt>
+                      <dd className="min-w-0 text-right text-slate-600">
+                        {items.map((item) => item.product?.name || "Produit").join(", ") || "—"}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-xs text-slate-400">Montant</dt>
+                      <dd className="font-medium">{formatFcfa(order.totalAmount)}</dd>
+                    </div>
+                  </dl>
                   <div className="mt-3 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium">{formatFcfa(order.totalAmount)}</span>
-                    <span />
+                    <StatusBadge status={order.status} />
                   </div>
                   <div className="mt-3">
-                    <MerchantSelect
-                      className="w-full"
-                      value={String(order.status)}
-                      onChange={(event) =>
-                        patchStatus.mutate(
-                          { orderId: order.id, status: event.target.value },
-                          {
-                            onError: (error) =>
-                              toast({
-                                title: "Statut non mis à jour",
-                                description: getUserErrorMessage(error),
-                                variant: "destructive",
-                              }),
-                          }
-                        )
-                      }
-                    >
-                      {ORDER_STATUSES.map((item) => (
-                        <option key={item} value={item}>
-                          {orderStatusLabel(item)}
-                        </option>
-                      ))}
-                    </MerchantSelect>
+                    <OrderActions
+                      order={order}
+                      busy={patchStatus.isPending}
+                      onStatus={(current, action) => void requestStatus(current, action)}
+                      onMessage={onMessageClient}
+                    />
                   </div>
-                  {onMessageClient && Number(order.client?.id || order.clientId) ? (
-                    <div className="mt-3">
-                      <GhostButton onClick={() => onMessageClient(Number(order.client?.id || order.clientId))}>
-                        Écrire
-                      </GhostButton>
-                    </div>
-                  ) : null}
                 </MobileCard>
               );
             })}
@@ -289,7 +415,13 @@ export function MerchantOrdersView({
         )}
       </Panel>
 
-      <MerchantOrderDialog order={selected} onClose={() => onSelectOrder(null)} />
+      <MerchantOrderDialog
+        order={selected}
+        busy={patchStatus.isPending}
+        onClose={() => onSelectOrder(null)}
+        onStatus={(current, action) => void requestStatus(current, action)}
+        onMessage={onMessageClient}
+      />
     </div>
   );
 }

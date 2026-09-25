@@ -6,14 +6,18 @@ export enum UserRole {
   CLIENT = "CLIENT",
   MERCHANT = "MERCHANT",
   SUPPLIER = "SUPPLIER",
+  MODERATOR = "MODERATOR",
   ADMIN = "ADMIN",
+  SUPER_ADMIN = "SUPER_ADMIN",
 }
 
 export const USER_ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.CLIENT]: "Client",
   [UserRole.MERCHANT]: "Commerçant",
   [UserRole.SUPPLIER]: "Fournisseur",
+  [UserRole.MODERATOR]: "Modérateur",
   [UserRole.ADMIN]: "Administrateur",
+  [UserRole.SUPER_ADMIN]: "Super administrateur",
 };
 
 export const mapStringToUserRole = (role: string): UserRole => {
@@ -29,6 +33,11 @@ export const mapStringToUserRole = (role: string): UserRole => {
     case 'ADMIN':
     case 'ADMINISTRATEUR':
       return UserRole.ADMIN;
+    case 'SUPER_ADMIN':
+      return UserRole.SUPER_ADMIN;
+    case 'MODERATOR':
+    case 'MODERATEUR':
+      return UserRole.MODERATOR;
     default:
       return UserRole.CLIENT;
   }

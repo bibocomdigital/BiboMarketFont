@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getErrorStatus } from "@domain/errors/app-error";
-import { useAuthSession, dashboardPathFor } from "@/hooks/use-auth-session";
+import { useAuthSession, dashboardPathFor, hasStoredCredentials } from "@/hooks/use-auth-session";
 import { useOrdersQuery } from "@/hooks/queries/use-orders-query";
 import NotificationCenter from "@/components/notification/NotificationCenter ";
 import CartIcon from "@/components/CartIcon";
@@ -50,6 +50,7 @@ const ClientDashboard = () => {
   useEffect(() => {
     if (!isReady) return;
     if (!isAuthenticated) {
+      if (hasStoredCredentials()) return;
       navigate("/login", { replace: true });
       return;
     }
@@ -59,11 +60,13 @@ const ClientDashboard = () => {
   }, [isReady, isAuthenticated, isClient, navigate, user?.role]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+    if (ordersQuery.fetchStatus === "fetching" || !ordersQuery.isFetched) return;
     if (getErrorStatus(ordersQuery.error) === 401) {
       logout();
       navigate("/login", { replace: true });
     }
-  }, [ordersQuery.error, logout, navigate]);
+  }, [isAuthenticated, ordersQuery.error, ordersQuery.fetchStatus, ordersQuery.isFetched, logout, navigate]);
 
   const handleLogout = () => {
     logout();
@@ -83,15 +86,20 @@ const ClientDashboard = () => {
     });
   };
 
-  const handleSearch = (query: string) => {
+  const searchQuery = searchParams.get("q") || "";
+
+  const handleSearch = useCallback((query: string) => {
     setSearchParams((prev) => {
+      const sameView = prev.get("view") === "products";
+      const sameQuery = (prev.get("q") || "") === query;
+      if (sameView && sameQuery) return prev;
       const params = new URLSearchParams(prev);
       params.set("view", "products");
       if (query) params.set("q", query);
       else params.delete("q");
       return params;
     });
-  };
+  }, [setSearchParams]);
 
   if (!isReady || !isAuthenticated || !isClient) {
     return <div className="min-h-screen bg-[#f6f8fb]" />;
@@ -110,6 +118,7 @@ const ClientDashboard = () => {
       displayName={displayName}
       roleLabel={clientRoleLabel(user?.role)}
       photo={user?.photo}
+      searchQuery={searchQuery}
       onSearch={handleSearch}
       onPremiumClick={() => handleSectionChange("products")}
       onProfileClick={() => navigate("/profile")}
@@ -149,7 +158,7 @@ const ClientDashboard = () => {
           }}
         />
       )}
-      {section === "products" && <ProductsGrid />}
+      {section === "products" && <ProductsGrid hideSearchBar />}
       {section === "orders" && <ClientOrdersView />}
       {section === "messages" && <ClientMessagesView initialPartnerId={selectedPartnerId} />}
       {section === "boutiques" && <Shops />}

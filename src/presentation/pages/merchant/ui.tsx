@@ -23,9 +23,9 @@ export function Panel({
   );
 }
 
-export function Th({ children }: { children: React.ReactNode }) {
+export function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-400">
+    <th className={cn("px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-400", className)}>
       {children}
     </th>
   );

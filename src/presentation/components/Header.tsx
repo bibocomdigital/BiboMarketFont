@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Menu, X, ShoppingCart, Search, ChevronDown, LogOut, User } from "lucide-react";
 import Button from "./ui-custom/Button";
 import { cn } from "@/lib/utils";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useShopCategoriesQuery } from "@/hooks/queries/use-shop-categories-query";
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { useCart } from "@/components/CartContext";
@@ -12,12 +12,18 @@ import { getPhotoUrl } from "@/services/authService";
 
 const Header = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAuthenticated, dashboardPath, logout } = useAuthSession();
   const { itemsCount } = useCart();
   const { data: categories = [], isPending } = useShopCategoriesQuery();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [categoriesPinned, setCategoriesPinned] = useState(false);
+  const categoriesRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+  const activeCategoryId = new URLSearchParams(location.search).get("categorieShopId");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -35,18 +41,77 @@ const Header = () => {
     };
   }, [isMobileMenuOpen]);
 
+  const cancelCategoryClose = () => {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  const closeCategories = () => {
+    cancelCategoryClose();
+    setCategoriesPinned(false);
+    setCategoriesOpen(false);
+  };
+
+  const openCategoriesFromHover = () => {
+    cancelCategoryClose();
+    setCategoriesOpen(true);
+  };
+
+  const closeCategoriesFromHover = () => {
+    if (categoriesPinned) return;
+    cancelCategoryClose();
+    closeTimer.current = window.setTimeout(() => setCategoriesOpen(false), 160);
+  };
+
+  useEffect(() => {
+    closeCategories();
+  }, [location.pathname, location.search]);
+
+  useEffect(() => () => cancelCategoryClose(), []);
+
+  useEffect(() => {
+    if (!categoriesOpen) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!categoriesRef.current?.contains(event.target as Node)) {
+        closeCategories();
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeCategories();
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [categoriesOpen, categoriesPinned]);
+
   const closeMobile = () => setIsMobileMenuOpen(false);
 
   const handleLogout = () => {
     logout();
     closeMobile();
-    navigate("/");
+    navigate("/", { replace: true });
   };
 
   const displayName = user
     ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email
     : "";
   const photoUrl = getPhotoUrl(user?.photo);
+
+  const navClass = (href: string, exact = false) => {
+    const path = location.pathname;
+    const active = exact ? path === href : path === href || path.startsWith(`${href}/`);
+    return cn(
+      "whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-colors duration-200",
+      active
+        ? "bg-bibocom-primary/10 text-bibocom-accent"
+        : "text-bibocom-primary hover:bg-bibocom-primary/5 hover:text-bibocom-accent"
+    );
+  };
 
   return (
     <>
@@ -59,94 +124,113 @@ const Header = () => {
             : "border-b border-transparent py-4 md:py-5"
         )}
       >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center">
               <Link to="/" className="flex items-center">
-                <span className="text-lg font-bold text-bibocom-primary sm:text-xl md:text-2xl">
+                <span className="text-lg font-bold tracking-tight text-bibocom-primary sm:text-xl">
                   BIBOCOM<span className="text-bibocom-accent">MARKET</span>
                 </span>
               </Link>
             </div>
 
-            <nav className="hidden lg:flex items-center gap-5 xl:gap-8">
-              {isAuthenticated && (
-                <Link
-                  to={dashboardPath}
-                  className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300"
-                >
-                  Tableau de bord
-                </Link>
-              )}
-              <Link
-                to="/"
-                className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300"
-              >
+            <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex xl:gap-1">
+              <Link to="/" className={navClass("/", true)}>
                 Accueil
               </Link>
 
-              <div className="relative group">
+              <div
+                className="relative"
+                ref={categoriesRef}
+                onMouseEnter={openCategoriesFromHover}
+                onMouseLeave={closeCategoriesFromHover}
+              >
                 <button
                   type="button"
-                  className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300 flex items-center"
+                  className={cn(
+                    "flex items-center whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-colors duration-200",
+                    activeCategoryId
+                      ? "bg-bibocom-primary/10 text-bibocom-accent"
+                      : "text-bibocom-primary hover:bg-bibocom-primary/5 hover:text-bibocom-accent"
+                  )}
+                  aria-expanded={categoriesOpen}
+                  aria-haspopup="true"
+                  onClick={() => {
+                    cancelCategoryClose();
+                    if (categoriesPinned) {
+                      closeCategories();
+                      return;
+                    }
+                    setCategoriesPinned(true);
+                    setCategoriesOpen(true);
+                  }}
                 >
                   Catégories
                   <ChevronDown
                     size={16}
-                    className="ml-1 transition-transform duration-300 group-hover:rotate-180"
+                    className={cn("ml-1 transition-transform duration-300", categoriesOpen && "rotate-180")}
                   />
                 </button>
-                <div className="absolute top-full left-0 mt-2 w-72 max-h-[70vh] overflow-y-auto rounded-md shadow-lg py-1 glass opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform origin-top scale-95 group-hover:scale-100 bg-white">
-                  {isPending && categories.length === 0 ? (
-                    <p className="px-4 py-2 text-sm text-slate-500">Chargement...</p>
-                  ) : categories.length === 0 ? (
-                    <p className="px-4 py-2 text-sm text-slate-500">Aucune catégorie</p>
-                  ) : (
-                    categories.map((category) => (
-                      <div key={category.id} className="py-1">
-                        <Link
-                          to={`/boutique?categorieShopId=${category.id}`}
-                          className="block px-4 py-2 text-sm font-medium text-bibocom-primary hover:bg-bibocom-primary/10 transition-colors duration-200"
-                        >
-                          {category.name}
-                        </Link>
-                        {Array.isArray(category.prodCategories) &&
-                          category.prodCategories.map((prod) => (
+                {categoriesOpen && (
+                  <div className="absolute left-0 top-full z-50 pt-2">
+                    <div className="max-h-[70vh] w-72 overflow-y-auto rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-100">
+                    {isPending && categories.length === 0 ? (
+                      <p className="px-4 py-2 text-sm text-slate-500">Chargement...</p>
+                    ) : categories.length === 0 ? (
+                      <p className="px-4 py-2 text-sm text-slate-500">Aucune catégorie</p>
+                    ) : (
+                      categories.map((category) => {
+                        const selected = activeCategoryId === String(category.id);
+                        return (
+                          <div key={category.id} className="py-1">
                             <Link
-                              key={prod.id}
-                              to={`/?category=${prod.id}`}
-                              className="block px-6 py-1.5 text-sm text-slate-600 hover:bg-bibocom-primary/10 hover:text-bibocom-primary transition-colors duration-200"
+                              to={`/boutique?categorieShopId=${category.id}`}
+                              className={cn(
+                                "block px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-bibocom-primary/10",
+                                selected ? "bg-bibocom-accent/10 text-bibocom-accent" : "text-bibocom-primary"
+                              )}
+                              onClick={closeCategories}
                             >
-                              {prod.name}
+                              {category.name}
                             </Link>
-                          ))}
-                      </div>
-                    ))
-                  )}
-                </div>
+                            {Array.isArray(category.prodCategories) &&
+                              category.prodCategories.map((prod) => (
+                                <Link
+                                  key={prod.id}
+                                  to={`/?category=${prod.id}`}
+                                  className="block px-6 py-1.5 text-sm text-slate-600 transition-colors duration-200 hover:bg-bibocom-primary/10 hover:text-bibocom-primary"
+                                  onClick={closeCategories}
+                                >
+                                  {prod.name}
+                                </Link>
+                              ))}
+                          </div>
+                        );
+                      })
+                    )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <Link
-                to="/boutique"
-                className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300"
-              >
+              <Link to="/boutique" className={navClass("/boutique")}>
                 Boutiques
               </Link>
-              <Link
-                to="/about"
-                className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300"
-              >
+              <Link to="/stories" className={navClass("/stories")}>
+                Stories
+              </Link>
+              <Link to="/livraisons" className={navClass("/livraisons")}>
+                Livraisons
+              </Link>
+              <Link to="/about" className={navClass("/about")}>
                 À propos
               </Link>
-              <Link
-                to="/contact"
-                className="text-bibocom-primary hover:text-bibocom-accent text-sm font-medium transition-colors duration-300"
-              >
+              <Link to="/contact" className={navClass("/contact")}>
                 Contact
               </Link>
             </nav>
 
-            <div className="hidden lg:flex items-center gap-3 xl:gap-4">
+            <div className="hidden shrink-0 items-center gap-2 lg:flex xl:gap-3">
               <button
                 type="button"
                 className="text-bibocom-primary hover:text-bibocom-accent transition-colors duration-300"
@@ -169,7 +253,11 @@ const Header = () => {
 
               {isAuthenticated ? (
                 <>
-                  <Link to={dashboardPath} className="flex items-center gap-2">
+                  <Link
+                    to={dashboardPath}
+                    className="flex items-center gap-2 rounded-full py-1 pr-2 pl-1 transition-colors hover:bg-bibocom-primary/5"
+                    title="Tableau de bord"
+                  >
                     {photoUrl ? (
                       <img
                         src={photoUrl}
@@ -181,7 +269,7 @@ const Header = () => {
                         <User size={16} />
                       </span>
                     )}
-                    <span className="max-w-[140px] truncate text-sm font-medium text-bibocom-primary">
+                    <span className="hidden max-w-[9rem] truncate text-sm font-medium whitespace-nowrap text-bibocom-primary xl:inline">
                       {displayName}
                     </span>
                   </Link>
@@ -305,6 +393,20 @@ const Header = () => {
               onClick={closeMobile}
             >
               Boutiques
+            </Link>
+            <Link
+              to="/stories"
+              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              onClick={closeMobile}
+            >
+              Stories
+            </Link>
+            <Link
+              to="/livraisons"
+              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              onClick={closeMobile}
+            >
+              Livraisons
             </Link>
             <Link
               to="/about"
