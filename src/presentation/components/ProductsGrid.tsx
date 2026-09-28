@@ -72,7 +72,7 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
     setPagination((prev) => ({ ...prev, page: 1 }));
   }, [qFromUrl]);
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
   
   // Fonction pour gérer l'ajout au panier
   const handleAddToCart = async (product: any, event?: React.MouseEvent) => {

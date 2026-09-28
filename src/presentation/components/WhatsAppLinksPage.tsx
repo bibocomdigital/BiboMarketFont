@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 
 // URL de base pour les images
-const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 
 const WhatsAppLinksPage = () => {

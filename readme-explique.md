@@ -154,14 +154,14 @@ Deux variables :
 
 | Variable | Rôle |
 |----------|------|
-| `NEXT_PUBLIC_API_URL` | URL vue **par le navigateur** (préfixe `NEXT_PUBLIC_` = exposée au client) |
+| `NEXT_PUBLIC_BACKEND_URL` | URL vue **par le navigateur** (préfixe `NEXT_PUBLIC_` = exposée au client) |
 | `API_URL` | URL utilisée **côté serveur Next** (rewrites `/api/...`) |
 
 Exemple local (`.env.example`) :
 
 ```
-NEXT_PUBLIC_API_URL=http://localhost:8001/api
-NEXT_PUBLIC_SITE_URL=http://localhost:8080
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8001/api
+NEXT_PUBLIC_FRONTEND_URL=http://localhost:8080
 API_URL=http://localhost:8001/api
 ```
 

@@ -3,7 +3,7 @@ import { parseApiError } from "../api/fetch-error";
 import { AppError } from "@domain/errors/app-error";
 
 // Configuration de l'API
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3007/api";
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3007/api";
 
 // URL de base Cloudinary pour les images
 export const CLOUDINARY_BASE_URL = "https://res.cloudinary.com/yourdomain"; // À remplacer par votre domaine Cloudinary

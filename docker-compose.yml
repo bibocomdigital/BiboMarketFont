@@ -16,9 +16,8 @@ services:
       - /app/.next
     environment:
       - WATCHPACK_POLLING=true
-      # Base du backend (avec préfixe /api) utilisée par les rewrites Next.js côté serveur.
+      # Le conteneur Next joint l'API par le réseau Docker. Le navigateur garde NEXT_PUBLIC_BACKEND_URL du .env.
       - API_URL=http://backend:3000/api
-      - NEXT_PUBLIC_API_URL=http://localhost:3005/api
     command: ["npm", "run", "dev"]
     depends_on:
       - backend

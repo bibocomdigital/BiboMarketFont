@@ -5,7 +5,7 @@ let socket: Socket | null = null;
 export function realtimeBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_BACKEND_URL;
   if (explicit) return explicit.replace(/\/$/, "");
-  const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005/api";
+  const api = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3005/api";
   return api.replace(/\/api\/?$/, "");
 }
 

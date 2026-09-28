@@ -43,7 +43,7 @@ jobs:
             NEXT_PUBLIC_BACKEND_URL=${{ vars.NEXT_PUBLIC_BACKEND_URL }}
             NEXT_PUBLIC_FRONTEND_URL=${{ vars.NEXT_PUBLIC_FRONTEND_URL }}
             NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
-            NEXT_PUBLIC_ENV=${{ vars.NEXT_PUBLIC_ENV }}
+            NODE_ENV=${{ vars.NODE_ENV }}
           tags: |
             ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:latest
             ${{ vars.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ github.sha }}

@@ -15,7 +15,7 @@ export const SEO_OG_IMAGE_PATH = "/placeholder.svg";
 export const SEO_OG_IMAGE_ALT = "BiboMarket";
 
 export function getSiteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || "https://bibocommarket.com";
+  return process.env.NEXT_PUBLIC_FRONTEND_URL || "https://bibocommarket.com";
 }
 
 export function absoluteUrl(path: string): string {

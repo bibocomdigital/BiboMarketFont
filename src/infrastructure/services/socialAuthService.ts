@@ -4,7 +4,7 @@
  */
 
 // Get backend URL from environment or use default
-const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3007/api';
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007/api';
 
 export interface GooglePopupResult {
   type?: string;
@@ -41,7 +41,6 @@ export const initiateGoogleLogin = (
       new URL(backendUrl).origin,
       window.location.origin,
       process.env.NEXT_PUBLIC_FRONTEND_URL,
-      process.env.NEXT_PUBLIC_SITE_URL,
     ]
       .filter((value): value is string => Boolean(value))
       .map((value) => {
