@@ -5,6 +5,7 @@
 // Importer les fonctions du service de configuration
 import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
 import { unwrapList } from '../api/api-envelope';
+import { AppError } from '@domain/errors/app-error';
 
 // Types pour les notifications
 export interface Notification {
@@ -138,7 +139,12 @@ export const getUserNotifications = async (): Promise<Notification[]> => {
     
     return sortNotificationsByDate(items);
   } catch (error) {
-    console.error('❌ [NOTIFICATION] Erreur:', error);
+    if (error instanceof TypeError) {
+      throw new AppError(
+        "Impossible de joindre le serveur. Réessayez dans un instant.",
+        "NETWORK",
+      );
+    }
     throw error;
   }
 };

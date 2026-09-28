@@ -22,7 +22,7 @@ import { Link } from "react-router-dom";
 import { useLoginMutation } from "@/hooks/mutations/use-auth-mutations";
 import { completeTwoFactor } from "@/services/authService";
 import { Input } from "@/components/ui/input";
-import { dashboardPathFor } from "@/hooks/use-auth-session";
+import { destinationAfterAuth } from "@/hooks/use-auth-session";
 import { getUserErrorMessage } from "@domain/errors/app-error";
 import { appAlert } from "@/presentation/lib/swal";
 import { ArrowRight } from "lucide-react";
@@ -142,7 +142,7 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
       }
       if (!response.user) return;
 
-      window.location.replace(dashboardPathFor(response.user.role));
+      window.location.replace(destinationAfterAuth(response.user, response.token));
 
       if (onClose) {
         onClose();
@@ -175,7 +175,7 @@ const LoginFormContent: React.FC<LoginFormContentProps> = ({
     setLoginError(null);
     try {
       const session = await completeTwoFactor(challenge, otp.trim());
-      window.location.replace(dashboardPathFor(session.user.role));
+      window.location.replace(destinationAfterAuth(session.user, session.token));
       onClose?.();
     } catch (error) {
       setLoginError(getUserErrorMessage(error));

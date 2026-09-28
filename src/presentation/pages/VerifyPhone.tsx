@@ -44,7 +44,7 @@ const VerifyPhone = () => {
     }
     const role = String(user?.role || "").toUpperCase();
     const staff = role === "ADMIN" || role === "SUPER_ADMIN" || role === "MODERATOR";
-    if (staff || user?.googleId || user?.phoneVerified) {
+    if (staff || user?.phoneVerified) {
       redirectToDashboard();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,7 +92,7 @@ const VerifyPhone = () => {
   };
 
   useEffect(() => {
-    if (!isReady || !isAuthenticated || !user || user.googleId || user.phoneVerified) return;
+    if (!isReady || !isAuthenticated || !user || user.phoneVerified) return;
     sendCodeMutation.mutate(undefined, {
       onSuccess: (result) => {
         toast({

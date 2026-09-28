@@ -5,7 +5,7 @@ import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useGoogleLoginMutation } from "@/presentation/hooks/mutations/use-auth-mutations";
-import { dashboardPathFor } from "@/hooks/use-auth-session";
+import { destinationAfterAuth } from "@/hooks/use-auth-session";
 import { useGoogleAuthReady } from "@/presentation/providers/google-auth-gate";
 
 interface GoogleSignInButtonProps {
@@ -35,7 +35,7 @@ const GoogleSignInButton = ({ className, onClose }: GoogleSignInButtonProps) => 
       const session = await googleLogin.mutateAsync(idToken);
       const destination = session.needsCompletion
         ? `/complete-profile?token=${session.token}`
-        : dashboardPathFor(session.user.role);
+        : destinationAfterAuth(session.user, session.token);
       window.location.replace(destination);
     } catch (error) {
       toast({

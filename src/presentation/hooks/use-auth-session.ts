@@ -1,3 +1,3 @@
 "use client";
 
-export { useAuthSession, dashboardPathFor, hasStoredCredentials } from "@/presentation/providers/auth-session-provider";
+export { useAuthSession, dashboardPathFor, destinationAfterAuth, hasStoredCredentials, isStaffRole } from "@/presentation/providers/auth-session-provider";

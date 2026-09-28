@@ -46,6 +46,36 @@ function leavePrivatePageIfLoggedOut() {
   window.location.replace("/login");
 }
 
+export function isStaffRole(role?: string | null): boolean {
+  const normalized = (role || "").toUpperCase();
+  return (
+    normalized === "ADMIN" ||
+    normalized === "ADMINISTRATEUR" ||
+    normalized === "SUPER_ADMIN" ||
+    normalized === "MODERATOR"
+  );
+}
+
+/** Après une connexion par e-mail : profil incomplet, puis code SMS, puis tableau de bord. */
+export function destinationAfterAuth(user: {
+  role?: string | null;
+  phoneVerified?: boolean;
+  phoneNumber?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}, token?: string | null): string {
+  if (isStaffRole(user.role)) return dashboardPathFor(user.role ?? undefined);
+  const phone = user.phoneNumber?.trim() ?? "";
+  const incomplete =
+    !user.firstName?.trim() ||
+    !user.lastName?.trim() ||
+    !phone ||
+    phone.startsWith("temp-");
+  if (incomplete && token) return `/complete-profile?token=${encodeURIComponent(token)}`;
+  if (!user.phoneVerified) return "/verify-phone";
+  return dashboardPathFor(user.role ?? undefined);
+}
+
 export function dashboardPathFor(role?: string): string {
   const normalized = (role || "").toUpperCase();
   if (

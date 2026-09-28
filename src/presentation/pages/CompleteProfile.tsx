@@ -193,26 +193,40 @@ const CompleteProfile = () => {
       const data = await response.json();
       console.log('✅ [COMPLETE_PROFILE] Profile updated successfully:', data);
       
+      const payload = unwrapRecord(data);
+      const updated = (payload.user && typeof payload.user === "object"
+        ? payload.user
+        : payload) as { phoneVerified?: boolean };
+      const phoneVerified = updated.phoneVerified === true;
+
       const storedUser = localStorage.getItem('user');
+      const nextUser = {
+        role: values.role,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        phoneNumber: values.phoneNumber,
+        phoneVerified,
+      };
       if (storedUser) {
         try {
           const parsed = JSON.parse(storedUser) as Record<string, unknown>;
-          localStorage.setItem(
-            'user',
-            JSON.stringify({ ...parsed, role: values.role }),
-          );
+          localStorage.setItem('user', JSON.stringify({ ...parsed, ...nextUser }));
         } catch {
-          localStorage.setItem('user', JSON.stringify({ role: values.role }));
+          localStorage.setItem('user', JSON.stringify(nextUser));
         }
+      } else {
+        localStorage.setItem('user', JSON.stringify(nextUser));
       }
       notifyAuthChanged();
 
       toast({
         title: "Profil complété",
-        description: "Votre profil a été mis à jour avec succès",
+        description: phoneVerified
+          ? "Votre profil a été mis à jour avec succès"
+          : "Confirmez votre numéro avec le code reçu par SMS.",
       });
-      
-      navigate(dashboardPathFor(values.role));
+
+      navigate(phoneVerified ? dashboardPathFor(values.role) : "/verify-phone", { replace: true });
     } catch (error) {
       toast({
         title: "Profil non enregistré",

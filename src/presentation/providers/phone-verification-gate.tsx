@@ -19,9 +19,8 @@ function isDashboardPath(pathname: string): boolean {
 }
 
 /**
- * Bloque l'accès aux espaces connectés (dashboards) tant que le numéro
- * de téléphone n'est pas vérifié. Les administrateurs et les comptes
- * Google (googleId) sont exemptés.
+ * Bloque l'accès aux tableaux de bord tant que le numéro
+ * n'est pas confirmé par code SMS. Les comptes staff sont exemptés.
  */
 export function PhoneVerificationGate() {
   const { user, isAuthenticated, isReady } = useAuthSession();
@@ -32,7 +31,7 @@ export function PhoneVerificationGate() {
     if (!isReady || !isAuthenticated || !user) return;
     const role = String(user.role || "").toUpperCase();
     const staff = role === "ADMIN" || role === "SUPER_ADMIN" || role === "MODERATOR";
-    if (staff || user.googleId || user.phoneVerified) return;
+    if (staff || user.phoneVerified) return;
     if (!isDashboardPath(location.pathname)) return;
     navigate("/verify-phone", { replace: true });
   }, [isReady, isAuthenticated, user, location.pathname, navigate]);
