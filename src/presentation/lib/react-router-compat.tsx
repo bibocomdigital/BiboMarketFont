@@ -5,9 +5,8 @@ import {
   usePathname,
   useRouter,
   useParams as useNextParams,
-  useSearchParams as useNextSearchParams,
 } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 
 const NAV_STATE_KEY = "__bibo_nav_state";
 
@@ -45,12 +44,44 @@ export function readNavState(): unknown {
   }
 }
 
+const searchListeners = new Set<() => void>();
+
+function subscribeSearch(listener: () => void) {
+  searchListeners.add(listener);
+  return () => {
+    searchListeners.delete(listener);
+  };
+}
+
+function emitSearch() {
+  searchListeners.forEach((listener) => listener());
+}
+
+function readSearch(): string {
+  if (typeof window === "undefined") return "";
+  return window.location.search;
+}
+
+function useBrowserSearch(): string {
+  const pathname = usePathname();
+  const search = useSyncExternalStore(subscribeSearch, readSearch, () => "");
+
+  useEffect(() => {
+    emitSearch();
+    window.addEventListener("popstate", emitSearch);
+    return () => window.removeEventListener("popstate", emitSearch);
+  }, [pathname]);
+
+  return search;
+}
+
 export function useNavigate() {
   const router = useRouter();
 
   return React.useCallback((to: To, options?: { replace?: boolean; state?: unknown }) => {
     if (typeof to === "number") {
       router.back();
+      window.setTimeout(emitSearch, 0);
       return;
     }
 
@@ -58,13 +89,13 @@ export function useNavigate() {
     const href = resolveTo(to);
     if (options?.replace) router.replace(href);
     else router.push(href);
+    window.setTimeout(emitSearch, 0);
   }, [router]);
 }
 
 export function useLocation() {
   const pathname = usePathname();
-  const searchParams = useNextSearchParams();
-  const search = searchParams.toString() ? `?${searchParams.toString()}` : "";
+  const search = useBrowserSearch();
   const [state, setState] = useState<unknown>(null);
 
   useEffect(() => {
@@ -79,10 +110,11 @@ export function useParams<T extends Record<string, string> = Record<string, stri
 }
 
 export function useSearchParams() {
-  const searchParams = useNextSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const currentQs = searchParams.toString();
+  const search = useBrowserSearch();
+  const currentQs = search.startsWith("?") ? search.slice(1) : search;
+  const searchParams = React.useMemo(() => new URLSearchParams(currentQs), [currentQs]);
 
   const setSearchParams = React.useCallback(
     (
@@ -102,6 +134,7 @@ export function useSearchParams() {
       const qs = params.toString();
       if (qs === currentQs) return;
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      window.setTimeout(emitSearch, 0);
     },
     [currentQs, pathname, router]
   );

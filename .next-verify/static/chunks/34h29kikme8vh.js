@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,84599,e=>{"use strict";var t=e.i(43476),a=e.i(16286);e.s(["default",0,()=>(0,t.jsx)(a.Navigate,{to:"/merchant-dashboard?view=orders",replace:!0})])}]);
