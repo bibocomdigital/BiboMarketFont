@@ -57,10 +57,43 @@ function emitSearch() {
   searchListeners.forEach((listener) => listener());
 }
 
+let searchEmitTimer: number | null = null;
+
+function emitSearchAfterHistoryUpdate() {
+  if (typeof window === "undefined" || searchEmitTimer !== null) return;
+  searchEmitTimer = window.setTimeout(() => {
+    searchEmitTimer = null;
+    emitSearch();
+  }, 0);
+}
+
 function readSearch(): string {
   if (typeof window === "undefined") return "";
   return window.location.search;
 }
+
+function installHistorySearchListener() {
+  if (typeof window === "undefined") return;
+  const nativePush = History.prototype.pushState;
+  const nativeReplace = History.prototype.replaceState;
+  window.history.pushState = function (data, unused, url) {
+    const result = nativePush.call(window.history, data, unused, url);
+    emitSearchAfterHistoryUpdate();
+    return result;
+  };
+  window.history.replaceState = function (data, unused, url) {
+    const result = nativeReplace.call(window.history, data, unused, url);
+    emitSearchAfterHistoryUpdate();
+    return result;
+  };
+  const host = window as Window & { __biboSearchPopstate?: boolean };
+  if (!host.__biboSearchPopstate) {
+    host.__biboSearchPopstate = true;
+    window.addEventListener("popstate", emitSearch);
+  }
+}
+
+installHistorySearchListener();
 
 function useBrowserSearch(): string {
   const pathname = usePathname();
