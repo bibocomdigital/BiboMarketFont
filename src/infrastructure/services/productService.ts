@@ -61,6 +61,7 @@ export interface Product {
   };
   createdAt: string;
   updatedAt: string;
+  boostedUntil?: string | null;
 }
 
 export interface ProductCategory {

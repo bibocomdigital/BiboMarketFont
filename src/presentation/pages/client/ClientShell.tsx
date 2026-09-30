@@ -13,7 +13,6 @@ import {
   Mail,
   Menu,
   Search,
-  Crown,
   LogOut,
   X,
 } from "lucide-react";
@@ -22,6 +21,7 @@ import { useUnreadMessagesQuery } from "@/hooks/queries/use-messages-query";
 import { NavUnreadBadge } from "@/components/messages/NavUnreadBadge";
 import { getPhotoUrl } from "@/services/authService";
 import { USER_ROLE_LABELS, type UserRole } from "@/types/user";
+import { AppLogo } from "@/components/brand/AppLogo";
 
 export type ClientSection =
   | "dashboard"
@@ -63,7 +63,7 @@ const TITLES: Record<ClientSection, string> = {
 };
 
 const SUBTITLES: Partial<Record<ClientSection, string>> = {
-  dashboard: "Suivez vos commandes, vos favoris et vos échanges",
+  dashboard: "Les produits des boutiques, au centre de votre espace",
   messages: "Échangez avec vos clients et gérez vos conversations",
   orders: "Consultez et suivez vos commandes",
   products: "Découvrez les produits de la marketplace",
@@ -126,13 +126,11 @@ function SidebarBody({
   onSectionChange,
   onGoHome,
   onLogout,
-  onPremiumClick,
 }: {
   section: ClientSection;
   onSectionChange: (section: ClientSection) => void;
   onGoHome?: () => void;
   onLogout?: () => void;
-  onPremiumClick?: () => void;
 }) {
   const { data: unreadCount = 0 } = useUnreadMessagesQuery();
   return (
@@ -148,19 +146,16 @@ function SidebarBody({
           />
         ))}
       </nav>
-      <div className="px-3 pb-4">
-        <div className="rounded-[18px] bg-gradient-to-br from-bibocom-accent/15 to-orange-50 p-4 ring-1 ring-bibocom-accent/10">
-          <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-bibocom-accent/15 text-bibocom-accent">
-            <Crown className="h-4 w-4" />
-          </div>
-          <p className="text-sm font-semibold text-bibocom-primary">Passez à la version Premium</p>
-          <p className="mt-1 text-xs text-slate-500">Plus de visibilité, plus de ventes !</p>
+        <div className="px-3 pb-4">
+        <div className="rounded-[18px] bg-orange-50 p-4 ring-1 ring-orange-100">
+          <p className="text-sm font-semibold text-bibocom-primary">Besoin d&apos;aide ?</p>
+          <p className="mt-1 text-xs text-slate-500">Une question sur une commande ou une boutique.</p>
           <button
             type="button"
-            onClick={onPremiumClick}
+            onClick={() => onSectionChange("contact")}
             className="mt-3 w-full rounded-full bg-bibocom-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-bibocom-accent/90"
           >
-            Découvrir
+            Contacter le support
           </button>
         </div>
         {onLogout ? (
@@ -195,7 +190,6 @@ export function ClientShell({
   headerExtra,
   searchQuery = "",
   onSearch,
-  onPremiumClick,
   onProfileClick,
   children,
 }: ClientShellProps) {
@@ -240,9 +234,7 @@ export function ClientShell({
           >
             <Menu className="h-5 w-5" />
           </button>
-          <p className="shrink-0 text-lg font-bold tracking-tight sm:text-xl">
-            BIBOCOM<span className="text-bibocom-accent">MARKET</span>
-          </p>
+          <AppLogo className="h-8 max-w-[150px] sm:h-9 sm:max-w-[190px]" />
           <form
             className="relative mx-auto hidden min-w-0 max-w-xl flex-1 md:block"
             onSubmit={(event) => {
@@ -355,7 +347,6 @@ export function ClientShell({
           onSectionChange={onSectionChange}
           onGoHome={onGoHome}
           onLogout={onLogout}
-          onPremiumClick={onPremiumClick}
         />
       </aside>
 
@@ -369,9 +360,7 @@ export function ClientShell({
           />
           <aside className="relative z-10 h-full w-[248px] bg-white shadow-2xl">
             <div className="border-b border-slate-100 px-4 py-4">
-              <p className="text-sm font-bold">
-                BIBOCOM<span className="text-bibocom-accent">MARKET</span>
-              </p>
+              <AppLogo href={null} className="h-8" />
             </div>
             <SidebarBody
               section={section}
@@ -384,10 +373,6 @@ export function ClientShell({
                 onMobileOpenChange(false);
               }}
               onLogout={onLogout}
-              onPremiumClick={() => {
-                onPremiumClick?.();
-                onMobileOpenChange(false);
-              }}
             />
           </aside>
         </div>

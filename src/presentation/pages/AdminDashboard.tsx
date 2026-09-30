@@ -15,6 +15,7 @@ import { AdminFeedbacksView } from "./admin/AdminFeedbacksView";
 import { AdminCategoriesView } from "./admin/AdminCategoriesView";
 import { AdminStoriesView } from "./admin/AdminStoriesView";
 import { AdminBadgeSettingsView } from "./admin/AdminBadgeSettingsView";
+import { AdminBoostSettingsView } from "./admin/AdminBoostSettingsView";
 import {
   AdminAdsView,
   AdminFinanceView,
@@ -41,6 +42,7 @@ const SECTIONS: AdminSection[] = [
   "finance",
   "security",
   "badge",
+  "boost",
 ];
 
 const MODERATOR_SECTIONS = new Set<AdminSection>(["shops", "products", "stories", "reports", "messages", "security"]);
@@ -225,6 +227,7 @@ const AdminDashboard = () => {
       {section === "finance" && <AdminFinanceView enabled={enabled && audience === "super"} />}
       {section === "security" && <AdminSecurityView />}
       {section === "badge" && <AdminBadgeSettingsView enabled={enabled && audience === "super"} />}
+      {section === "boost" && <AdminBoostSettingsView enabled={enabled && audience === "super"} />}
     </AdminShell>
   );
 };

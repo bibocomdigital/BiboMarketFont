@@ -4,15 +4,15 @@ import { Facebook, Twitter, Instagram, Linkedin, Heart, ChevronRight, MapPin, Ph
 
 const Footer = () => {
   return (
-    <footer className="bg-bibocom-primary text-white">
-      <div className="max-w-7xl mx-auto">
+    <footer className="w-full bg-bibocom-primary text-white">
+      <div>
         {/* Main Footer */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 px-6 sm:px-10 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 px-2 sm:px-3 lg:px-3 py-16">
           {/* Company Info */}
           <div className="md:col-span-1">
-            <h3 className="text-xl font-bold mb-6">
-              BIBOCOM<span className="text-bibocom-accent">MARKET</span>
-            </h3>
+            <a href="/" className="mb-6 inline-flex" aria-label="Bibocom Market">
+              <img src="/images/logo.png" alt="Bibocom Market" className="h-10 w-auto max-w-[200px] rounded-lg bg-white object-contain" />
+            </a>
             <p className="mb-6 text-white/80">
               La révolution du e-commerce au Sénégal. Connectez-vous, achetez, vendez et prospérez dans notre écosystème numérique.
             </p>
@@ -134,11 +134,11 @@ const Footer = () => {
             <p className="text-white/80 text-sm mb-4 md:mb-0">
               &copy; {new Date().getFullYear()} BIBOCOM MARKET. Tous droits réservés.
             </p>
-            <div className="flex items-center text-white/80 text-sm">
-              <a href="#" className="hover:text-white transition-colors duration-300 mr-6">
+            <div className="flex max-w-full flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/80">
+              <a href="#" className="hover:text-white transition-colors duration-300">
                 Conditions d'utilisation
               </a>
-              <a href="#" className="hover:text-white transition-colors duration-300 mr-6">
+              <a href="#" className="hover:text-white transition-colors duration-300">
                 Politique de confidentialité
               </a>
               <p className="flex items-center">

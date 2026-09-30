@@ -11,6 +11,7 @@ import {
   Tags,
   MessageSquare,
   BadgeCheck,
+  Rocket,
   Clapperboard,
   Megaphone,
   LifeBuoy,
@@ -39,7 +40,8 @@ export type AdminSection =
   | "tickets"
   | "finance"
   | "security"
-  | "badge";
+  | "badge"
+  | "boost";
 
 export type AdminAudience = "super" | "admin" | "moderator";
 
@@ -63,6 +65,7 @@ const NAV_ITEMS: Array<{
   { id: "finance", label: "Finances", icon: Wallet },
   { id: "security", label: "Sécurité", icon: Shield },
   { id: "badge", label: "Badge", icon: BadgeCheck },
+  { id: "boost", label: "Boost", icon: Rocket },
 ];
 
 const MODERATOR_SECTIONS = new Set<AdminSection>(["shops", "products", "stories", "reports", "messages", "security"]);
@@ -83,11 +86,13 @@ const TITLES: Record<AdminSection, string> = {
   finance: "Finances badges",
   security: "Double authentification",
   badge: "Badge et formules",
+  boost: "Boost produit",
 };
 
 const SUBTITLES: Partial<Record<AdminSection, string>> = {
   messages: "Échangez avec les commerçants de la plateforme",
   badge: "Prix commerçant, prix livreur et formules des boutiques",
+  boost: "Prix et durée de mise en avant d’un produit",
 };
 
 type AdminShellProps = {
@@ -172,7 +177,7 @@ function SidebarBody({
   const { data: unreadCount = 0 } = useUnreadMessagesQuery();
   const items = NAV_ITEMS.filter((item) => {
     if (audience === "moderator") return MODERATOR_SECTIONS.has(item.id);
-    if (item.id === "badge" || item.id === "finance") return audience === "super";
+    if (item.id === "badge" || item.id === "finance" || item.id === "boost") return audience === "super";
     return true;
   });
   return (

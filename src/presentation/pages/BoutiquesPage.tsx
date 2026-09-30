@@ -1,17 +1,12 @@
 import React from 'react';
 import Shops from '@/components/Shops';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import { PublicShell } from '@/components/home/PublicShell';
 
 const BoutiquesPage = () => {
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      <main className="flex-grow pt-24 md:pt-28">
-        <Shops />
-      </main>
-      <Footer />
-    </div>
+    <PublicShell>
+      <Shops />
+    </PublicShell>
   );
 };
 

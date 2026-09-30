@@ -9,6 +9,8 @@ import { useShopCategoriesQuery } from "@/hooks/queries/use-shop-categories-quer
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { useCart } from "@/components/CartContext";
 import { getPhotoUrl } from "@/services/authService";
+import { AppLogo } from "@/components/brand/AppLogo";
+import { HomeMenu } from "@/components/home/HomeRails";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -23,7 +25,30 @@ const Header = () => {
   const [categoriesPinned, setCategoriesPinned] = useState(false);
   const categoriesRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
+  const [headerQuery, setHeaderQuery] = useState("");
+  const withMenu =
+    location.pathname === "/" ||
+    ["/boutique", "/boutiques", "/stories", "/livraisons", "/about", "/contact", "/cart"].some(
+      (path) => location.pathname === path || location.pathname.startsWith(`${path}/`),
+    );
   const activeCategoryId = new URLSearchParams(location.search).get("categorieShopId");
+
+  useEffect(() => {
+    setHeaderQuery(new URLSearchParams(location.search).get("q") || "");
+  }, [location.search]);
+
+  const submitHeaderSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const params = new URLSearchParams(location.search);
+    const next = headerQuery.trim();
+    if (next) params.set("q", next);
+    else params.delete("q");
+    const qs = params.toString();
+    navigate(qs ? `/?${qs}` : "/");
+    window.setTimeout(() => {
+      document.getElementById("produits")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -36,8 +61,16 @@ const Header = () => {
 
   useEffect(() => {
     document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
+    if (!isMobileMenuOpen) return () => {
+      document.body.style.overflow = "";
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
     };
   }, [isMobileMenuOpen]);
 
@@ -124,20 +157,91 @@ const Header = () => {
             : "border-b border-transparent py-4 md:py-5"
         )}
       >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex shrink-0 items-center">
-              <Link to="/" className="flex items-center">
-                <span className="text-lg font-bold tracking-tight text-bibocom-primary sm:text-xl">
-                  BIBOCOM<span className="text-bibocom-accent">MARKET</span>
-                </span>
+        <div className="px-3">
+          {withMenu ? (
+            <div className="flex flex-col gap-2 md:hidden">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-bibocom-primary ring-1 ring-slate-200"
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  aria-label="Ouvrir le menu"
+                  aria-expanded={isMobileMenuOpen}
+                >
+                  <Menu size={22} />
+                </button>
+                <AppLogo className="h-8 min-w-0" />
+                <Link
+                  to="/cart"
+                  data-cart-target=""
+                  className="relative ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-bibocom-primary"
+                  aria-label="Panier"
+                >
+                  <ShoppingCart size={20} />
+                  {itemsCount > 0 && (
+                    <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-bibocom-accent text-[10px] text-white">
+                      {itemsCount > 9 ? "9+" : itemsCount}
+                    </span>
+                  )}
+                </Link>
+              </div>
+              <form onSubmit={submitHeaderSearch} className="flex min-w-0 items-center">
+                <label className="sr-only" htmlFor="header-search-mobile">Rechercher un produit</label>
+                <input
+                  id="header-search-mobile"
+                  value={headerQuery}
+                  onChange={(event) => setHeaderQuery(event.target.value)}
+                  placeholder="Rechercher..."
+                  className="min-w-0 flex-1 rounded-l-full border border-slate-200 bg-white px-4 py-2 text-sm text-bibocom-primary outline-none placeholder:text-slate-400 focus:border-bibocom-accent"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex h-[38px] shrink-0 items-center rounded-r-full bg-bibocom-accent px-4 text-white"
+                  aria-label="Rechercher"
+                >
+                  <Search size={16} />
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 md:hidden">
+              <AppLogo className="h-8 min-w-0" />
+              <Link
+                to="/cart"
+                data-cart-target=""
+                className="relative ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-bibocom-primary"
+                aria-label="Panier"
+              >
+                <ShoppingCart size={20} />
+                {itemsCount > 0 && (
+                  <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-bibocom-accent text-[10px] text-white">
+                    {itemsCount > 9 ? "9+" : itemsCount}
+                  </span>
+                )}
               </Link>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-bibocom-primary ring-1 ring-slate-200"
+                onClick={() => setIsMobileMenuOpen(true)}
+                aria-label="Ouvrir le menu"
+                aria-expanded={isMobileMenuOpen}
+              >
+                <Menu size={22} />
+              </button>
+            </div>
+          )}
+
+          <div className="hidden items-center gap-3 md:flex">
+            <div className="flex shrink-0 items-center">
+              <AppLogo className="h-8 sm:h-10" />
             </div>
 
-            <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex xl:gap-1">
+            <nav className={cn("hidden min-w-0 items-center gap-0.5 lg:flex xl:gap-1", withMenu ? "" : "flex-1 justify-center")}>
+              {withMenu ? null : (
               <Link to="/" className={navClass("/", true)}>
                 Accueil
               </Link>
+              )}
 
               <div
                 className="relative"
@@ -213,6 +317,8 @@ const Header = () => {
                 )}
               </div>
 
+              {withMenu ? null : (
+                <>
               <Link to="/boutique" className={navClass("/boutique")}>
                 Boutiques
               </Link>
@@ -228,18 +334,47 @@ const Header = () => {
               <Link to="/contact" className={navClass("/contact")}>
                 Contact
               </Link>
+                </>
+              )}
             </nav>
 
-            <div className="hidden shrink-0 items-center gap-2 lg:flex xl:gap-3">
+            {withMenu ? (
+              <form onSubmit={submitHeaderSearch} className="flex min-w-0 flex-1 items-center">
+                <label className="sr-only" htmlFor="header-search">Rechercher un produit</label>
+                <input
+                  id="header-search"
+                  value={headerQuery}
+                  onChange={(event) => setHeaderQuery(event.target.value)}
+                  placeholder="Rechercher un produit, une catégorie..."
+                  className="min-w-0 flex-1 rounded-l-full border border-slate-200 bg-white px-4 py-2 text-sm text-bibocom-primary outline-none placeholder:text-slate-400 focus:border-bibocom-accent"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex h-[38px] items-center gap-2 rounded-r-full bg-bibocom-accent px-4 text-sm font-semibold text-white"
+                  aria-label="Rechercher"
+                >
+                  <Search size={16} />
+                </button>
+              </form>
+            ) : null}
+
+            <div className="flex shrink-0 items-center gap-2 xl:gap-3">
               <button
                 type="button"
-                className="text-bibocom-primary hover:text-bibocom-accent transition-colors duration-300"
+                className={cn(
+                  "text-bibocom-primary hover:text-bibocom-accent transition-colors duration-300",
+                  withMenu && "hidden"
+                )}
                 aria-label="Rechercher"
+                onClick={() => {
+                  if (!withMenu) navigate("/");
+                }}
               >
                 <Search size={20} />
               </button>
               <Link
                 to="/cart"
+                data-cart-target=""
                 className="text-bibocom-primary hover:text-bibocom-accent transition-colors duration-300 relative"
                 aria-label="Panier"
               >
@@ -277,7 +412,7 @@ const Header = () => {
                     Déconnexion
                   </Button>
                 </>
-              ) : (
+              ) : withMenu ? null : (
                 <>
                   <Link to="/login">
                     <Button size="sm" variant="outline">
@@ -291,48 +426,56 @@ const Header = () => {
               )}
             </div>
 
-            <div className="flex items-center lg:hidden">
-              <button
-                type="button"
-                className="p-2 text-bibocom-primary"
-                onClick={() => setIsMobileMenuOpen((open) => !open)}
-                aria-label={isMobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
-                aria-expanded={isMobileMenuOpen}
-              >
-                <Menu size={24} />
-              </button>
-            </div>
           </div>
         </div>
       </header>
 
-      <div
-        className={cn(
-          "fixed inset-0 z-[60] overflow-y-auto bg-bibocom-light lg:hidden",
-          "transition-transform duration-300 ease-in-out",
-          isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
-        )}
-        aria-hidden={!isMobileMenuOpen}
-      >
-        <div className="flex h-full flex-col overflow-y-auto px-6 pt-6">
-          <div className="mb-8 flex items-center justify-between">
-            <span className="text-xl font-bold text-bibocom-primary">
-              BIBOCOM<span className="text-bibocom-accent">MARKET</span>
-            </span>
+      {isMobileMenuOpen && withMenu ? (
+        <div className="fixed inset-0 z-[60] md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-bibocom-primary/40"
+            aria-label="Fermer le menu"
+            onClick={closeMobile}
+          />
+          <div className="relative flex h-full w-[min(100%,20rem)] max-w-full flex-col bg-[#f6f7fb] shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3">
+              <p className="text-base font-semibold text-bibocom-primary">Menu</p>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-bibocom-primary ring-1 ring-slate-200"
+                onClick={closeMobile}
+                aria-label="Fermer le menu"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6">
+              <HomeMenu stacked onNavigate={closeMobile} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isMobileMenuOpen && !withMenu ? (
+      <div className="fixed inset-0 z-[60] flex flex-col bg-bibocom-light lg:hidden">
+        <div className="flex h-full flex-col overflow-y-auto px-5 pb-8 pt-4">
+          <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-4">
+            <AppLogo href={null} className="h-8" />
             <button
               type="button"
-              className="rounded-lg p-2 text-bibocom-primary"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-bibocom-primary ring-1 ring-slate-200"
               onClick={closeMobile}
               aria-label="Fermer le menu"
             >
-              <X size={24} />
+              <X size={22} />
             </button>
           </div>
-          <nav className="flex flex-col space-y-6">
-            {isAuthenticated && (
+          <nav className="flex flex-col">
+            {isAuthenticated && !withMenu && (
               <Link
                 to={dashboardPath}
-                className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+                className="border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary"
                 onClick={closeMobile}
               >
                 Tableau de bord
@@ -340,7 +483,7 @@ const Header = () => {
             )}
             <Link
               to="/"
-              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              className={cn("border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary", withMenu && "hidden")}
               onClick={closeMobile}
             >
               Accueil
@@ -348,7 +491,7 @@ const Header = () => {
             <div>
               <button
                 type="button"
-                className="flex w-full items-center justify-between text-lg font-medium text-bibocom-primary"
+                className="flex w-full items-center justify-between border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary"
                 onClick={() => setMobileCategoriesOpen((open) => !open)}
               >
                 Catégories
@@ -387,43 +530,47 @@ const Header = () => {
                 </div>
               )}
             </div>
+            {withMenu ? null : (
+            <>
             <Link
               to="/boutique"
-              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              className="border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary"
               onClick={closeMobile}
             >
               Boutiques
             </Link>
             <Link
               to="/stories"
-              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              className="border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary"
               onClick={closeMobile}
             >
               Stories
             </Link>
             <Link
               to="/livraisons"
-              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              className="border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary"
               onClick={closeMobile}
             >
               Livraisons
             </Link>
             <Link
               to="/about"
-              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              className="border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary"
               onClick={closeMobile}
             >
               À propos
             </Link>
             <Link
               to="/contact"
-              className="text-bibocom-primary hover:text-bibocom-accent text-lg font-medium"
+              className="border-b border-slate-100 py-3 text-base font-medium text-bibocom-primary"
               onClick={closeMobile}
             >
               Contact
             </Link>
+            </>
+            )}
           </nav>
-          <div className="mt-8 flex w-full flex-col gap-3">
+          <div className={cn("mt-6 flex w-full flex-col gap-3", withMenu && !isAuthenticated && "hidden")}>
             {isAuthenticated ? (
               <>
                 <Link
@@ -460,28 +607,20 @@ const Header = () => {
               </>
             )}
           </div>
-          <div className="mt-auto mb-10 flex items-center justify-center space-x-6">
-            <button
-              type="button"
-              className="text-bibocom-primary hover:text-bibocom-accent transition-colors duration-300"
-            >
-              <Search size={24} />
-            </button>
-            <Link
-              to="/cart"
-              onClick={closeMobile}
-              className="text-bibocom-primary hover:text-bibocom-accent transition-colors duration-300 relative"
-            >
-              <ShoppingCart size={24} />
-              {itemsCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-bibocom-accent text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
-                  {itemsCount > 9 ? "9+" : itemsCount}
-                </span>
-              )}
-            </Link>
-          </div>
+          {withMenu ? null : (
+          <Link
+            to="/cart"
+            onClick={closeMobile}
+            className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-medium text-bibocom-primary"
+          >
+            <ShoppingCart size={18} />
+            Panier
+            {itemsCount > 0 ? ` (${itemsCount > 9 ? "9+" : itemsCount})` : ""}
+          </Link>
+          )}
         </div>
       </div>
+      ) : null}
     </>
   );
 };

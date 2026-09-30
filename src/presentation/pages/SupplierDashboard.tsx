@@ -2,9 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { BadgeCheck, LayoutDashboard, LogOut, Menu, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { logout } from "@/services/authService";
+import { logout, getPhotoUrl } from "@/services/authService";
+import { AppLogo } from "@/components/brand/AppLogo";
+import NotificationCenter from "@/components/notification/NotificationCenter ";
 import { dashboardPathFor, hasStoredCredentials, useAuthSession } from "@/hooks/use-auth-session";
 import { MerchantBadgeView } from "./merchant/MerchantBadgeView";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +32,8 @@ const SupplierDashboard = () => {
   const [zone, setZone] = useState("");
   const [price, setPrice] = useState("");
   const [pending, setPending] = useState(false);
+  const [section, setSection] = useState<"home" | "badge">("home");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const load = () => {
     listMyServices()
@@ -86,22 +91,100 @@ const SupplierDashboard = () => {
   };
 
   if (!isReady || !isAuthenticated || !isSupplier) {
-    return <div className="min-h-screen bg-bibocom-light" />;
+    return <div className="min-h-screen bg-[#f6f7fb]" />;
   }
 
-  return (
-    <div className="min-h-screen bg-bibocom-light">
-      <div className="bg-bibocom-primary text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold">Tableau de bord Fournisseur</h1>
-          <Button variant="outline" onClick={handleLogout} className="bg-white text-bibocom-primary">
-            Se déconnecter
-          </Button>
-        </div>
-      </div>
+  const displayName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+  const photoUrl = getPhotoUrl(user?.photo);
+  const nav = [
+    { id: "home" as const, label: "Accueil", icon: LayoutDashboard },
+    { id: "badge" as const, label: "Badge", icon: BadgeCheck },
+  ];
 
-      <main className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
-        <MerchantBadgeView />
+  const sidebar = (
+    <div className="flex h-full flex-col bg-white">
+      <div className="px-4 py-4">
+        <AppLogo href={null} className="h-8 max-w-[150px]" />
+      </div>
+      <nav className="flex-1 space-y-1 px-3">
+        {nav.map((item) => {
+          const Icon = item.icon;
+          const active = section === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setSection(item.id);
+                setMobileOpen(false);
+              }}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${
+                active ? "bg-orange-50 text-bibocom-accent" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="border-t border-slate-100 px-3 py-4">
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-500 hover:bg-slate-50"
+        >
+          <LogOut className="h-4 w-4" />
+          Déconnexion
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#f6f7fb] text-bibocom-primary">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[230px] border-r border-slate-200 bg-white md:block">
+        {sidebar}
+      </aside>
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button type="button" className="absolute inset-0 bg-bibocom-primary/40" aria-label="Fermer le menu" onClick={() => setMobileOpen(false)} />
+          <aside className="relative z-50 h-full w-[240px] bg-white shadow-2xl">{sidebar}</aside>
+        </div>
+      ) : null}
+      <div className="md:pl-[230px]">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-slate-200 md:hidden"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Ouvrir le menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <AppLogo className="h-8 max-w-[140px] md:hidden" />
+          <p className="hidden text-sm font-semibold lg:block">{section === "badge" ? "Badge et stories" : "Services de livraison"}</p>
+          <div className="ml-auto flex items-center gap-2">
+            <NotificationCenter />
+            <div className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2">
+              {photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-bibocom-accent">
+                  <Truck className="h-4 w-4" />
+                </span>
+              )}
+              <span className="hidden text-left lg:block">
+                <span className="block max-w-[9rem] truncate text-sm font-semibold leading-tight">{displayName || "Fournisseur"}</span>
+                <span className="block text-[11px] text-slate-400">Fournisseur</span>
+              </span>
+            </div>
+          </div>
+        </header>
+        <main className="space-y-6 px-4 py-5 sm:px-6">
+          {section === "badge" ? <MerchantBadgeView /> : null}
+          {section === "home" ? (
         <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-xl font-semibold text-bibocom-primary">Services de livraison</h2>
           <p className="mt-2 text-sm text-slate-600">
@@ -155,7 +238,9 @@ const SupplierDashboard = () => {
             ))}
           </ul>
         </section>
-      </main>
+          ) : null}
+        </main>
+      </div>
     </div>
   );
 };

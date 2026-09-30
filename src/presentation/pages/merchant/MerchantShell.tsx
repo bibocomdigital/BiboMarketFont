@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   LayoutDashboard,
   Store,
@@ -13,10 +13,12 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUnreadMessagesQuery } from "@/hooks/queries/use-messages-query";
 import { NavUnreadBadge } from "@/components/messages/NavUnreadBadge";
+import { AppLogo } from "@/components/brand/AppLogo";
 
 export type MerchantSection =
   | "dashboard"
@@ -33,29 +35,25 @@ const NAV_ITEMS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "boutique", label: "Boutique", icon: Store },
+  { id: "dashboard", label: "Accueil", icon: LayoutDashboard },
   { id: "products", label: "Produits", icon: Package },
+  { id: "orders", label: "Mes commandes", icon: ShoppingBag },
+  { id: "messages", label: "Messagerie", icon: MessageSquare },
+  { id: "boutique", label: "Boutique", icon: Store },
   { id: "comptoir", label: "Comptoir", icon: Receipt },
-  { id: "orders", label: "Commandes", icon: ShoppingBag },
-  { id: "messages", label: "Messages", icon: MessageSquare },
-  { id: "profile", label: "Profil", icon: User },
   { id: "badge", label: "Badge", icon: BadgeCheck },
+  { id: "profile", label: "Profil", icon: User },
 ];
 
 const TITLES: Record<MerchantSection, string> = {
-  dashboard: "Dashboard boutique",
+  dashboard: "Accueil",
   boutique: "Ma boutique",
   products: "Mes produits",
   comptoir: "Vente au comptoir",
-  orders: "Commandes reçues",
-  messages: "Messages",
+  orders: "Mes commandes",
+  messages: "Messagerie",
   profile: "Mon profil",
   badge: "Badge et stories",
-};
-
-const SUBTITLES: Partial<Record<MerchantSection, string>> = {
-  messages: "Échangez avec vos clients et gérez vos conversations",
 };
 
 type MerchantShellProps = {
@@ -66,7 +64,9 @@ type MerchantShellProps = {
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
   displayName: string;
+  photoUrl?: string | null;
   onLogout: () => void;
+  onSearch?: (term: string) => void;
   headerExtra?: React.ReactNode;
   children: React.ReactNode;
 };
@@ -101,8 +101,8 @@ function NavButton({
         "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
         collapsed && "justify-center px-0",
         active
-          ? "bg-bibocom-accent text-white"
-          : "text-white/70 hover:bg-white/10 hover:text-white"
+          ? "bg-orange-50 text-bibocom-accent"
+          : "text-slate-600 hover:bg-slate-50 hover:text-bibocom-primary"
       )}
     >
       <span className="relative shrink-0">
@@ -111,7 +111,7 @@ function NavButton({
       </span>
       {!collapsed && (
         <>
-          <span>{item.label}</span>
+          <span className="truncate">{item.label}</span>
           <NavUnreadBadge count={badge} collapsed={false} />
         </>
       )}
@@ -136,16 +136,14 @@ function SidebarBody({
 }) {
   const { data: unreadCount = 0 } = useUnreadMessagesQuery();
   return (
-    <div className="flex h-full flex-col">
-      <div className={cn("flex items-center px-4 pt-5 pb-6", collapsed ? "justify-center" : "justify-between")}>
-        {!collapsed && (
-          <p className="text-sm font-semibold tracking-wide text-white/90">Bibo Market</p>
-        )}
+    <div className="flex h-full flex-col bg-white">
+      <div className={cn("flex items-center gap-2 px-4 py-4", collapsed ? "justify-center" : "justify-between")}>
+        {!collapsed && <AppLogo href={null} className="h-8 max-w-[150px]" />}
         {showCollapse && onToggleCollapsed && (
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
             aria-label={collapsed ? "Ouvrir le menu" : "Réduire le menu"}
           >
             <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
@@ -166,13 +164,13 @@ function SidebarBody({
         ))}
       </nav>
 
-      <div className="mt-auto border-t border-white/10 px-3 py-4">
+      <div className="mt-auto border-t border-slate-100 px-3 py-4">
         <button
           type="button"
           onClick={onLogout}
           title={collapsed ? "Déconnexion" : undefined}
           className={cn(
-            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:bg-white/10 hover:text-white",
+            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-500 hover:bg-slate-50 hover:text-bibocom-primary",
             collapsed && "justify-center px-0"
           )}
         >
@@ -192,22 +190,26 @@ export function MerchantShell({
   mobileOpen,
   onMobileOpenChange,
   displayName,
+  photoUrl,
   onLogout,
+  onSearch,
   headerExtra,
   children,
 }: MerchantShellProps) {
   const isMessages = section === "messages";
+  const [term, setTerm] = useState("");
+
   return (
     <div
       className={cn(
-        "bg-bibocom-light text-bibocom-primary",
+        "bg-[#f6f7fb] text-bibocom-primary",
         isMessages ? "h-dvh overflow-hidden" : "min-h-screen"
       )}
     >
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden border-r border-white/10 bg-bibocom-primary transition-[width] duration-200 md:block",
-          collapsed ? "w-[72px]" : "w-[240px]"
+          "fixed inset-y-0 left-0 z-30 hidden border-r border-slate-200 bg-white transition-[width] duration-200 md:block",
+          collapsed ? "w-[72px]" : "w-[230px]"
         )}
       >
         <SidebarBody
@@ -224,11 +226,11 @@ export function MerchantShell({
         <div className="fixed inset-0 z-40 md:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-bibocom-primary/50"
+            className="absolute inset-0 bg-bibocom-primary/40"
             aria-label="Fermer le menu"
             onClick={() => onMobileOpenChange(false)}
           />
-          <aside className="relative z-50 h-full w-[240px] bg-bibocom-primary shadow-2xl">
+          <aside className="relative z-50 h-full w-[240px] border-r border-slate-200 bg-white shadow-2xl">
             <SidebarBody
               collapsed={false}
               section={section}
@@ -245,36 +247,66 @@ export function MerchantShell({
       <div
         className={cn(
           "flex flex-col transition-[padding] duration-200",
-          collapsed ? "md:pl-[72px]" : "md:pl-[240px]",
+          collapsed ? "md:pl-[72px]" : "md:pl-[230px]",
           isMessages ? "h-full min-h-0" : "min-h-screen"
         )}
       >
-        <header className="flex shrink-0 flex-col gap-4 px-4 pb-2 pt-6 sm:flex-row sm:items-start sm:justify-between sm:px-6 lg:px-8">
-          <div className="flex items-start gap-3">
+        <header className="sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-bibocom-primary ring-1 ring-slate-200 md:hidden"
+            onClick={() => onMobileOpenChange(true)}
+            aria-label="Ouvrir le menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <AppLogo className="h-8 max-w-[140px] md:hidden" />
+          <p className="hidden text-sm font-semibold text-bibocom-primary lg:block">{TITLES[section]}</p>
+          <form
+            className="relative min-w-0 flex-1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSearch?.(term.trim());
+            }}
+          >
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={term}
+              onChange={(event) => setTerm(event.target.value)}
+              placeholder="Rechercher un produit"
+              aria-label="Rechercher un produit"
+              className="w-full rounded-full border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-bibocom-accent focus:bg-white"
+            />
+          </form>
+          <div className="flex shrink-0 items-center gap-2">
+            {headerExtra}
             <button
               type="button"
-              className="mt-1 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-bibocom-primary shadow-sm md:hidden"
-              onClick={() => onMobileOpenChange(true)}
-              aria-label="Ouvrir le menu"
+              onClick={() => onSectionChange("profile")}
+              className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 hover:bg-slate-50"
             >
-              <Menu className="h-5 w-5" />
+              {photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-bibocom-accent">
+                  <User className="h-4 w-4" />
+                </span>
+              )}
+              <span className="hidden text-left lg:block">
+                <span className="block max-w-[9rem] truncate text-sm font-semibold leading-tight">
+                  {displayName || "Commerçant"}
+                </span>
+                <span className="block text-[11px] text-slate-400">Commerçant</span>
+              </span>
             </button>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{TITLES[section]}</h1>
-              {SUBTITLES[section] ? (
-                <p className="mt-1 text-sm text-slate-500">{SUBTITLES[section]}</p>
-              ) : displayName ? (
-                <p className="mt-1 text-sm text-slate-500">{displayName}</p>
-              ) : null}
-            </div>
           </div>
-          {headerExtra}
         </header>
         <main
           className={cn(
             isMessages
-              ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
-              : "flex-1 px-4 pb-10 pt-4 sm:px-6 lg:px-8"
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : "flex-1 px-4 py-5 sm:px-6"
           )}
         >
           {children}

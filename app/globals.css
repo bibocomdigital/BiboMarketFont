@@ -320,3 +320,23 @@
   line-height: 1.2;
   letter-spacing: -0.03em;
 }
+
+/* Accueil : trois colonnes dès 1200px. Entre 768 et 1199, la colonne de droite passe sous le contenu. */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .home-rail {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1200px) {
+  .home-layout.home-layout {
+    grid-template-columns: 280px minmax(0, 1fr) 300px;
+  }
+
+  .home-rail {
+    position: sticky;
+    top: 6rem;
+    z-index: 20;
+    align-self: start;
+  }
+}

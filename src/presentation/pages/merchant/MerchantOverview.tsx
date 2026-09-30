@@ -13,7 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { BadgeCheck, Package, Store } from "lucide-react";
-import type { ShopWithProducts } from "@/services/shopService";
+import { formatImageUrl, type ShopWithProducts } from "@/services/shopService";
 import type { MerchantProductStats, MerchantRevenuePoint, MerchantStats } from "@/services/merchantService";
 import { formatDateFr, formatFcfa, orderStatusLabel } from "@/lib/admin-analytics";
 import { GhostButton, Panel, queryErrorMessage } from "./ui";
@@ -51,11 +51,13 @@ type MerchantOverviewProps = {
   chart?: MerchantRevenuePoint[];
   productStats?: MerchantProductStats;
   shop?: ShopWithProducts | null;
+  displayName?: string;
   loading: boolean;
   error: unknown;
   days: number;
   onDaysChange: (days: number) => void;
   onOpenOrder: (id: number) => void;
+  onOpenSection: (section: "products" | "orders" | "boutique" | "badge" | "comptoir" | "messages") => void;
 };
 
 export function MerchantOverview({
@@ -63,11 +65,13 @@ export function MerchantOverview({
   chart,
   productStats,
   shop,
+  displayName,
   loading,
   error,
   days,
   onDaysChange,
   onOpenOrder,
+  onOpenSection,
 }: MerchantOverviewProps) {
   if (loading && !stats) {
     return (
@@ -104,8 +108,85 @@ export function MerchantOverview({
   }));
   const categories = productStats?.categoryStats || [];
 
+  const topProducts = stats.topProducts || [];
+  const shopLogo = formatImageUrl(shop?.logo || null);
+
   return (
-    <div className="space-y-6">
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0 space-y-4">
+        <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-bibocom-primary to-[#16385c] p-5 text-white sm:p-6">
+          <p className="text-sm text-white/70">{shop?.name || "Votre boutique"}</p>
+          <h2 className="mt-1 max-w-xl text-2xl font-semibold leading-tight">
+            {displayName ? `Bonjour ${displayName.split(" ")[0]}` : "Espace commerçant"}
+          </h2>
+          <p className="mt-2 max-w-lg text-sm text-white/75">
+            Les commandes se règlent à la livraison. Le badge se paie à part et s’affiche sur la boutique.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenSection("orders")}
+              className="rounded-full bg-bibocom-accent px-4 py-2 text-sm font-semibold text-white"
+            >
+              Voir les commandes
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenSection("boutique")}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Ma boutique
+            </button>
+          </div>
+        </section>
+
+        {categories.length > 0 ? (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {categories.map((row) => (
+              <button
+                key={`${row.categorieProdId || row.category}-${row.count}`}
+                type="button"
+                onClick={() => onOpenSection("products")}
+                className="shrink-0 rounded-full bg-white px-3 py-1.5 text-sm font-medium text-bibocom-primary ring-1 ring-slate-200"
+              >
+                {row.category} · {row.count}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-100 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold">Produits les plus vendus</h3>
+            <button type="button" onClick={() => onOpenSection("products")} className="text-sm font-medium text-bibocom-accent">
+              Voir tout
+            </button>
+          </div>
+          {topProducts.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">Aucun produit vendu pour le moment.</p>
+          ) : (
+            <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {topProducts.slice(0, 4).map((item, index) => (
+                <li key={item.productId ?? item.product?.id ?? index} className="flex gap-3 rounded-xl bg-slate-50 p-3">
+                  {item.product?.images?.[0]?.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.product.images[0].imageUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-white">
+                      <Package className="h-5 w-5 text-slate-300" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{item.productName || item.product?.name || "Produit"}</p>
+                    <p className="mt-1 text-sm font-semibold text-bibocom-accent">{formatFcfa(item.totalRevenue)}</p>
+                    <p className="text-xs text-slate-400">{item.totalSold} vendu(s)</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
       <div className="flex justify-end">
         <div className="flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-100">
           {[7, 30].map((value) => (
@@ -396,6 +477,84 @@ export function MerchantOverview({
           )}
         </Card>
       </div>
+      </div>
+
+      <aside className="space-y-4">
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+          <div className="flex items-center gap-3">
+            {shopLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={shopLogo} alt="" className="h-12 w-12 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-50 text-bibocom-accent">
+                <Store className="h-5 w-5" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{displayName || "Commerçant"}</p>
+              <p className="truncate text-sm text-slate-500">{shop?.name || "Sans boutique"}</p>
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-slate-500">Chiffre d’affaires</p>
+          <p className="text-xl font-semibold">{formatFcfa(stats.totalRevenue)}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Badge boutique : {shop?.verifiedBadge ? "actif" : "inactif"}
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenSection("badge")}
+            className="mt-4 w-full rounded-full bg-bibocom-accent px-4 py-2 text-sm font-semibold text-white"
+          >
+            {shop?.verifiedBadge ? "Gérer le badge" : "Obtenir le badge"}
+          </button>
+        </section>
+
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">Mes commandes</h3>
+            <button type="button" onClick={() => onOpenSection("orders")} className="text-sm text-bibocom-accent">
+              Voir tout
+            </button>
+          </div>
+          <ul className="mt-3 space-y-2 text-sm">
+            {[
+              ["En attente", stats.pendingOrders],
+              ["Confirmées", stats.confirmedOrders],
+              ["Expédiées", stats.shippedOrders],
+              ["Livrées", stats.deliveredOrders],
+              ["Annulées", stats.canceledOrders],
+            ].map(([label, value]) => (
+              <li key={String(label)} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">{label}</span>
+                <span className="font-semibold">{value}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+          <h3 className="font-semibold">Raccourcis</h3>
+          <div className="mt-3 grid gap-2">
+            {(
+              [
+                ["products", "Mes produits"],
+                ["comptoir", "Vente au comptoir"],
+                ["boutique", "Ma boutique"],
+                ["messages", "Messagerie"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onOpenSection(id)}
+                className="rounded-xl bg-slate-50 px-3 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-bibocom-accent"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+      </aside>
     </div>
   );
 }

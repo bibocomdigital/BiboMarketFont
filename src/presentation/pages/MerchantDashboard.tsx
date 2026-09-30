@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { User } from "lucide-react";
 import { getErrorStatus } from "@domain/errors/app-error";
+import { getPhotoUrl } from "@/services/authService";
 import { useAuthSession, dashboardPathFor, hasStoredCredentials } from "@/hooks/use-auth-session";
 import { useMyShopQuery } from "@/hooks/queries/use-shops-query";
 import {
@@ -169,20 +169,20 @@ const MerchantDashboard = () => {
       mobileOpen={mobileOpen}
       onMobileOpenChange={setMobileOpen}
       displayName={displayName}
+      photoUrl={getPhotoUrl(user?.photo)}
       onLogout={handleLogout}
-      headerExtra={
-        <div className="flex items-center gap-2">
-          <NotificationCenter />
-          <button
-            type="button"
-            onClick={() => handleSectionChange("profile")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-bibocom-primary shadow-sm"
-            aria-label="Mon profil"
-          >
-            <User className="h-4 w-4" />
-          </button>
-        </div>
-      }
+      onSearch={(term) => {
+        setSearchParams((prev) => {
+          const params = new URLSearchParams(prev);
+          params.set("view", "products");
+          if (term) params.set("q", term);
+          else params.delete("q");
+          params.delete("order");
+          params.delete("partner");
+          return params;
+        });
+      }}
+      headerExtra={<NotificationCenter />}
     >
       {section === "dashboard" && (
         <>
@@ -196,10 +196,12 @@ const MerchantDashboard = () => {
               chart={chartQuery.data}
               productStats={productStatsQuery.data}
               shop={shopQuery.data}
+              displayName={displayName}
               loading={shopQuery.isPending || statsQuery.isPending}
               error={statsQuery.error}
               days={days}
               onDaysChange={setDays}
+              onOpenSection={handleSectionChange}
               onOpenOrder={(id) => {
                 setSearchParams((prev) => {
                   const params = new URLSearchParams(prev);

@@ -1,6 +1,5 @@
 import React from 'react';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import { PublicShell } from '@/components/home/PublicShell';
 import { 
   Users, 
   Target, 
@@ -20,16 +19,14 @@ import {
 
 const AboutPage = ({ embedded = false }: { embedded?: boolean }) => {
   return (
-    <div className={embedded ? "overflow-hidden rounded-[18px] bg-white ring-1 ring-slate-100" : "flex min-h-screen flex-col bg-bibocom-light"}>
-      {!embedded && <Header />}
-      <div className={embedded ? undefined : "flex-1 pt-20 md:pt-24"}>
+    <PublicShell bare={embedded} bareClassName="overflow-hidden rounded-[18px] bg-white ring-1 ring-slate-100">
       {/* Hero Section */}
       <div className="relative overflow-hidden bg-bibocom-primary text-white">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-bibocom-secondary/25 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-10 h-56 w-56 rounded-full bg-bibocom-accent/20 blur-3xl" />
-        <div className="container relative mx-auto px-4 py-16">
+        <div className="container relative mx-auto px-4 py-10 sm:py-14">
           <div className="text-center max-w-4xl mx-auto">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            <h1 className="mb-6 text-3xl font-bold sm:text-4xl lg:text-5xl">
               À propos de <span className="text-bibocom-accent">BibocomMarket</span>
             </h1>
             <p className="text-xl md:text-2xl text-white/80 mb-8 leading-relaxed">
@@ -482,9 +479,7 @@ const AboutPage = ({ embedded = false }: { embedded?: boolean }) => {
           </div>
         </div>
       </section>
-      </div>
-      {!embedded && <Footer />}
-    </div>
+    </PublicShell>
   );
 };
 

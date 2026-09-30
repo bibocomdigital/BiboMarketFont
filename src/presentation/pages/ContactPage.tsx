@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import { PublicShell } from '@/components/home/PublicShell';
 import { contactFormSchema } from '@/presentation/lib/validation/schemas';
 import { appAlert } from '@/presentation/lib/swal';
 import { SupportAssistant } from '@/components/support/SupportAssistant';
@@ -91,16 +90,14 @@ const ContactPage = ({ embedded = false }: { embedded?: boolean }) => {
   };
 
   return (
-    <div className={embedded ? "overflow-hidden rounded-[18px] bg-white ring-1 ring-slate-100" : "flex min-h-screen flex-col bg-bibocom-light"}>
-      {!embedded && <Header />}
-      <div className={embedded ? undefined : "flex-1 pt-20 md:pt-24"}>
+    <PublicShell bare={embedded} bareClassName="overflow-hidden rounded-[18px] bg-white ring-1 ring-slate-100">
       {/* Hero Section */}
       <div className="relative overflow-hidden bg-bibocom-primary text-white">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-bibocom-secondary/25 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-10 h-56 w-56 rounded-full bg-bibocom-accent/20 blur-3xl" />
-        <div className="container relative mx-auto px-4 py-16">
+        <div className="container relative mx-auto px-4 py-10 sm:py-14">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold md:text-5xl">
+            <h1 className="mb-4 text-3xl font-bold sm:text-4xl">
               Contactez-<span className="text-bibocom-accent">nous</span>
             </h1>
             <p className="text-xl text-white/80 max-w-2xl mx-auto">
@@ -456,9 +453,7 @@ const ContactPage = ({ embedded = false }: { embedded?: boolean }) => {
           </div>
         </div>
       </div>
-      </div>
-      {!embedded && <Footer />}
-    </div>
+    </PublicShell>
   );
 };
 

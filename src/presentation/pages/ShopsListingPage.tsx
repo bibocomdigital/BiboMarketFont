@@ -5,8 +5,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useShopsQuery } from "@/hooks/queries/use-shops-query";
 import { useShopCategoriesQuery } from "@/hooks/queries/use-shop-categories-query";
 import { ServiceUnavailableState } from "@/components/feedback/ServiceUnavailableState";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import { PublicShell } from "@/components/home/PublicShell";
 import { VoirPlusButton } from "@/components/ui/voir-plus-button";
 import { formatImageUrl, type Shop } from "@/services/shopService";
 import { cn } from "@/lib/utils";
@@ -44,14 +43,14 @@ function ShopLogo({ shop, size }: { shop: Shop; size: "card" | "list" }) {
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden bg-bibocom-light ring-1 ring-slate-100",
-        size === "card" ? "h-24 w-24 rounded-full" : "h-14 w-14 rounded-xl"
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-orange-100 shadow-md ring-1 ring-orange-100",
+        size === "card" ? "h-24 w-24" : "h-14 w-14"
       )}
     >
       {logo ? (
-        <img src={logo} alt="" className="h-full w-full object-contain" />
+        <img src={logo} alt="" className="h-full w-full object-cover" />
       ) : (
-        <Store className={size === "card" ? "h-9 w-9 text-bibocom-primary/50" : "h-6 w-6 text-bibocom-primary/50"} />
+        <Store className={size === "card" ? "h-9 w-9 text-orange-600" : "h-6 w-6 text-orange-600"} />
       )}
     </div>
   );
@@ -61,12 +60,12 @@ function ShopMeta({ shop, align }: { shop: Shop; align: "center" | "start" }) {
   return (
     <div
       className={cn(
-        "flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500",
+        "flex w-full max-w-full flex-wrap gap-x-3 gap-y-1 text-sm text-slate-500",
         align === "center" ? "justify-center" : "justify-start"
       )}
     >
       {shop.address ? (
-        <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
           <MapPin size={14} className="shrink-0 text-bibocom-accent" />
           <span className="truncate">{shop.address}</span>
         </span>
@@ -250,15 +249,7 @@ const ShopsListingPage = () => {
   const title = activeCategory ? activeCategory.name : "Toutes nos boutiques";
   const countLabel = `${filteredShops.length} boutique${filteredShops.length !== 1 ? "s" : ""}`;
 
-  const shell = (content: React.ReactNode) => (
-    <div className="flex min-h-screen flex-col bg-bibocom-light">
-      <Header />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16 pt-24 sm:px-6 md:pt-28 lg:px-10">
-        {content}
-      </main>
-      <Footer />
-    </div>
-  );
+  const shell = (content: React.ReactNode) => <PublicShell>{content}</PublicShell>;
 
   if (isLoading) {
     return shell(
@@ -291,7 +282,7 @@ const ShopsListingPage = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium text-bibocom-accent">Boutiques</p>
-          <h1 className="mt-1 text-3xl font-bold text-bibocom-primary">{title}</h1>
+          <h1 className="mt-1 text-2xl font-bold text-bibocom-primary sm:text-3xl">{title}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {countLabel}
             {searchTerm ? ` pour « ${searchTerm} »` : ""}
@@ -356,7 +347,7 @@ const ShopsListingPage = () => {
             value={sortOrder}
             onChange={(event) => setSortOrder(event.target.value as "asc" | "desc")}
             aria-label="Ordre"
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-bibocom-primary outline-none focus:ring-2 focus:ring-bibocom-accent/30"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-bibocom-primary outline-none focus:ring-2 focus:ring-bibocom-accent/30 sm:w-auto"
           >
             <option value="asc">Croissant (A-Z)</option>
             <option value="desc">Décroissant (Z-A)</option>
@@ -375,7 +366,7 @@ const ShopsListingPage = () => {
       </div>
 
       {categories.length > 0 ? (
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-4 flex w-full min-w-0 gap-2 overflow-x-auto pb-1">
           <button
             type="button"
             onClick={() => selectCategory(null)}

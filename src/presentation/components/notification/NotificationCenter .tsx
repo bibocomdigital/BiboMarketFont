@@ -17,6 +17,7 @@ import {
   type Notification,
 } from "@/services/notificationService";
 import { confirmAction } from "@/components/feedback/confirm-dialog";
+import { getUserErrorMessage } from "@domain/errors/app-error";
 import { NotificationsList } from "./NotificationsList";
 
 const PREVIEW_LIMIT = 6;
@@ -28,7 +29,7 @@ const NotificationCenter = ({ tone = "default" }: { tone?: "default" | "admin" }
   const markAllRead = useMarkAllNotificationsReadMutation();
   const deleteOne = useDeleteNotificationMutation();
   const deleteAll = useDeleteAllNotificationsMutation();
-  const { data: notificationsData = [], isPending, isError, refetch } = useNotificationsQuery();
+  const { data: notificationsData = [], isPending, isError, error, refetch } = useNotificationsQuery();
 
   const notifications = (Array.isArray(notificationsData) ? notificationsData : []).filter(
     (item) => !isChatMessageNotification(item),
@@ -152,7 +153,9 @@ const NotificationCenter = ({ tone = "default" }: { tone?: "default" | "admin" }
           {isError ? (
             <div className="px-4 py-8 text-center">
               <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-              <p className="mt-2 text-sm text-slate-600">Impossible de charger les notifications.</p>
+              <p className="mt-2 text-sm text-slate-600">
+                {getUserErrorMessage(error) || "Impossible de charger les notifications."}
+              </p>
               <button
                 type="button"
                 onClick={() => void refetch()}

@@ -10,7 +10,7 @@ import { VoirPlusButton } from '@/components/ui/voir-plus-button';
 
 const PAGE_SIZE = 6;
 
-const Shops = ({ hideWhenUnavailable = false }: { hideWhenUnavailable?: boolean }) => {
+const Shops = ({ hideWhenUnavailable = false, embedded = false }: { hideWhenUnavailable?: boolean; embedded?: boolean }) => {
   const { data: shops = [], isPending, isError, isFetching, refetch } = useShopsQuery();
   const isLoading = isPending && shops.length === 0;
   const isUnavailable = isError && shops.length === 0;
@@ -59,9 +59,9 @@ const Shops = ({ hideWhenUnavailable = false }: { hideWhenUnavailable?: boolean 
   }
 
   return (
-    <section className="overflow-hidden bg-gradient-to-b from-white to-bibocom-light/50 py-20">
-      <div className="container mx-auto px-6 sm:px-10">
-        <div className="mb-12 text-center">
+    <section className={embedded ? "overflow-hidden py-4" : "overflow-hidden bg-gradient-to-b from-white to-bibocom-light/50 py-20"}>
+      <div className={embedded ? "" : "container mx-auto px-6 sm:px-10"}>
+        <div className={embedded ? "mb-5" : "mb-12 text-center"}>
           <span className="mb-4 inline-block rounded-full bg-bibocom-accent/10 px-3 py-1 text-sm text-bibocom-accent">
             Nos Boutiques
           </span>
@@ -79,7 +79,7 @@ const Shops = ({ hideWhenUnavailable = false }: { hideWhenUnavailable?: boolean 
           </div>
         ) : (
           <>
-            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={embedded ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : "mx-auto grid max-w-5xl grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"}>
               {visibleShops.map((shop) => {
                 const logo = formatImageUrl(shop.logo || null);
                 return (

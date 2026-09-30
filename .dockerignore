@@ -1,10 +1,35 @@
+# Dépendances et sorties Next : réinstallées ou régénérées dans l'image
 node_modules
 .next
+out
+build
+.vercel
+
+# Secrets : fournis au runtime par Compose, pas copiés dans l'image
+.env
+.env.*
+!.env.example
+
+# Dépôt, CI et éditeurs
 .git
 .github
-.env*
-!.env.example
+.vscode
+.idea
+.cursor
+
+# Tests, couverture et journaux
+coverage
+*.log
 npm-debug.log*
-README.md
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.tsbuildinfo
+.DS_Store
+*.pem
+
+# Fichiers utiles seulement en local
 docker-compose.yml
 Dockerfile
+README.md
+AGENTS.md

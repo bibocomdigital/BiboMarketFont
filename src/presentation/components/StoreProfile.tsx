@@ -255,7 +255,7 @@ const ShopProfile = () => {
   const shopLogo = formatImageUrl(shop.logo || null);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+    <div className="w-full py-2 sm:py-4">
       <button 
         type="button"
         onClick={handleGoBack} 

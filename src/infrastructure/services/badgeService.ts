@@ -39,6 +39,15 @@ export type MyBadge = {
   active: boolean;
 };
 
+export type StoryProduct = {
+  id: number;
+  name: string;
+  price: number;
+  promoPrice: number | null;
+  stock: number;
+  imageUrl: string | null;
+};
+
 export type StoryItem = {
   id: number;
   userId: number;
@@ -48,6 +57,7 @@ export type StoryItem = {
   createdAt: string;
   expiresAt: string;
   mediaUrl: string;
+  products?: StoryProduct[];
   author: {
     id: number;
     firstName: string | null;
@@ -70,7 +80,7 @@ async function authRequest<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const response = await fetch(`${backendUrl}${path}`, { ...init, cache: "no-store", headers });
   if (!response.ok) {
-    throw await parseApiError(response, "Erreur badge");
+    throw await parseApiError(response, "Le paiement du badge a échoué. Réessayez dans un instant.");
   }
   return unwrapApi(await response.json()) as T;
 }
@@ -130,10 +140,69 @@ export function revokeBadge(userId: number) {
   return authRequest<{ message: string }>(`/admin/badges/${userId}/revoke`, { method: "POST" });
 }
 
-export async function listStories(): Promise<StoryItem[]> {
+const STORIES_CACHE_KEY = "bibocom-stories-feed";
+const STORIES_MEMORY_MS = 20_000;
+const STORIES_SESSION_MS = 60_000;
+
+let storiesMemory: { at: number; stories: StoryItem[] } | null = null;
+
+function rememberStories(stories: StoryItem[]) {
+  storiesMemory = { at: Date.now(), stories };
+  try {
+    sessionStorage.setItem(STORIES_CACHE_KEY, JSON.stringify(storiesMemory));
+  } catch {
+    // Le quota du navigateur n'empêche pas l'affichage.
+  }
+}
+
+/** Dernier fil déjà reçu, pour afficher les cartes sans attendre le réseau. */
+export function cachedStories(): StoryItem[] | null {
+  if (storiesMemory && Date.now() - storiesMemory.at < STORIES_SESSION_MS) return storiesMemory.stories;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORIES_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at?: number; stories?: StoryItem[] };
+    if (!parsed.at || !Array.isArray(parsed.stories) || Date.now() - parsed.at > STORIES_SESSION_MS) return null;
+    storiesMemory = { at: parsed.at, stories: parsed.stories };
+    return parsed.stories;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * URL affichable d'un média de story.
+ * Les fichiers locaux vont directement à l'API (le proxy Next force no-store).
+ * Les images Cloudinary sont réduites pour la grille.
+ */
+export function storyDisplayUrl(url: string, width?: number): string {
+  const absolute = url.startsWith("/api/")
+    ? `${backendUrl.replace(/\/$/, "")}${url.slice(4)}`
+    : url;
+  if (!width || !absolute.includes("res.cloudinary.com/")) return absolute;
+  const marker = "/upload/";
+  const index = absolute.indexOf(marker);
+  if (index < 0) return absolute;
+  const rest = absolute.slice(index + marker.length);
+  if (!/^v\d+\//.test(rest)) return absolute;
+  return `${absolute.slice(0, index)}${marker}w_${width},c_limit,q_auto,f_auto/${rest}`;
+}
+
+export async function listStories(fresh = false): Promise<StoryItem[]> {
+  if (!fresh && storiesMemory && Date.now() - storiesMemory.at < STORIES_MEMORY_MS) {
+    return storiesMemory.stories;
+  }
   const response = await fetch(`${backendUrl}/stories`);
   if (!response.ok) throw await parseApiError(response, "Impossible de charger les stories");
   const payload = unwrapApi(await response.json()) as { stories?: StoryItem[] };
+  const stories = payload.stories ?? [];
+  rememberStories(stories);
+  return stories;
+}
+
+export async function listMyStories(): Promise<StoryItem[]> {
+  const payload = await authRequest<{ stories?: StoryItem[] }>("/stories/mine");
   return payload.stories ?? [];
 }
 
@@ -148,13 +217,21 @@ export function setStoryStatus(id: number, status: "PUBLISHED" | "REJECTED") {
   });
 }
 
+export function setStoryProducts(id: number, productIds: number[]) {
+  return authRequest<{ story: StoryItem }>(`/stories/${id}/products`, {
+    method: "PATCH",
+    body: JSON.stringify({ productIds }),
+  });
+}
+
 export function deleteStory(id: number) {
   return authRequest(`/stories/${id}`, { method: "DELETE" });
 }
 
-export function publishStory(file: File, durationSeconds?: number) {
+export function publishStory(file: File, durationSeconds?: number, productIds: number[] = []) {
   const body = new FormData();
   body.set("media", file);
   if (durationSeconds !== undefined) body.set("durationSeconds", String(durationSeconds));
+  if (productIds.length > 0) body.set("productIds", productIds.join(","));
   return authRequest("/stories", { method: "POST", body });
 }

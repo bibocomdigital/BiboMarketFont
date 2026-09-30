@@ -3,13 +3,11 @@
 
 import React, { useEffect, useState } from 'react';
 import Header from '@/components/Header';
-import Hero from '@/components/Hero';
-import Features from '@/components/Features';
+import Hero, { HomeCategoryCards, HomeSellerBanner } from '@/components/Hero';
+import { HomeMenu, HomeRightRail } from '@/components/home/HomeRails';
 import Shops from '@/components/Shops';
 import ProductsGrid from '@/components/ProductsGrid';
-import CallToAction from '@/components/CallToAction';
 import Footer from '@/components/Footer';
-import { HomeAds } from '@/components/home/HomeAds';
 import { ArrowUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -81,30 +79,30 @@ const Index = () => {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col bg-bibocom-light">
-      {/* Decorative background elements */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-gradient-to-b from-bibocom-light to-white">
-        <div className="absolute top-0 left-0 w-full h-full bg-hero-pattern opacity-5"></div>
-        <div className="absolute -top-20 -right-20 w-96 h-96 bg-bibocom-secondary/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-1/3 left-20 w-64 h-64 bg-bibocom-accent/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-bibocom-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-bibocom-secondary/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '3s' }}></div>
-        
-        <div className="absolute top-1/4 left-1/2 w-2 h-2 bg-bibocom-accent rounded-full"></div>
-        <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-bibocom-secondary rounded-full"></div>
-        <div className="absolute top-2/3 left-1/3 w-2 h-2 bg-bibocom-primary rounded-full"></div>
-        <div className="absolute bottom-1/4 right-1/3 w-4 h-4 bg-bibocom-accent/50 rounded-full"></div>
-      </div>
-
-      {/* Main content */}
+    <div className="relative flex min-h-dvh w-full min-w-0 flex-col overflow-x-clip bg-[#f6f7fb]">
       <div className="relative z-10">
         <Header />
-        <main className="flex-grow">
-          <Hero />
-          <HomeAds />
-          <ProductsGrid />
-          <Shops hideWhenUnavailable />
-         
+        <main className="min-w-0 flex-grow pt-32 md:pt-24">
+          <div className="home-layout grid min-w-0 gap-3 px-3 py-3 md:grid-cols-[280px_minmax(0,1fr)] md:items-start">
+            <aside className="hidden md:sticky md:top-24 md:z-20 md:block md:self-start">
+              <HomeMenu />
+            </aside>
+            <div className="min-w-0 space-y-2">
+              <Hero />
+              <section id="produits" className="scroll-mt-24 py-6">
+                <h2 className="text-xl font-semibold text-bibocom-primary">Produits populaires</h2>
+                <div className="mt-4">
+                  <ProductsGrid hideSearchBar hideCategoryPills />
+                </div>
+              </section>
+              <HomeCategoryCards />
+              <Shops hideWhenUnavailable embedded />
+              <HomeSellerBanner />
+            </div>
+            <aside className="home-rail min-w-0 min-[1200px]:sticky min-[1200px]:top-24 min-[1200px]:z-20 min-[1200px]:self-start">
+              <HomeRightRail />
+            </aside>
+          </div>
         </main>
         <Footer />
       </div>

@@ -3,9 +3,14 @@
  */
 
 // Importer les fonctions du service de configuration
-import { backendUrl, getAuthToken, getAuthHeaders, handleApiError } from './configService';
+import { backendUrl, getAuthToken, getAuthHeaders } from './configService';
 import { unwrapList } from '../api/api-envelope';
+import { parseApiError } from '../api/fetch-error';
 import { AppError } from '@domain/errors/app-error';
+
+async function rejectNotification(response: Response, fallback: string): Promise<never> {
+  throw await parseApiError(response, fallback);
+}
 
 // Types pour les notifications
 export interface Notification {
@@ -128,9 +133,7 @@ export const getUserNotifications = async (): Promise<Notification[]> => {
     console.log('📊 [NOTIFICATION] Statut de la réponse de récupération:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [NOTIFICATION] Erreur lors de la récupération des notifications:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la récupération des notifications');
+      return rejectNotification(response, 'Impossible de charger les notifications.');
     }
     
     const items = unwrapList(await response.json(), ['notifications']) as Notification[];
@@ -174,9 +177,7 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
     console.log('📊 [NOTIFICATION] Statut de la réponse de marquage:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [NOTIFICATION] Erreur lors du marquage de la notification:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors du marquage de la notification');
+      return rejectNotification(response, 'Impossible de marquer la notification comme lue.');
     }
     
     const data = await response.json();
@@ -184,7 +185,7 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
     
     return data;
   } catch (error) {
-    console.error('❌ [NOTIFICATION] Erreur:', error);
+    if (error instanceof AppError) throw error;
     throw error;
   }
 };
@@ -212,9 +213,7 @@ export const markAllNotificationsAsRead = async (): Promise<MarkAsReadResponse> 
     console.log('📊 [NOTIFICATION] Statut de la réponse de marquage global:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [NOTIFICATION] Erreur lors du marquage des notifications:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors du marquage des notifications');
+      return rejectNotification(response, 'Impossible de marquer les notifications comme lues.');
     }
     
     const data = await response.json();
@@ -222,7 +221,7 @@ export const markAllNotificationsAsRead = async (): Promise<MarkAsReadResponse> 
     
     return data;
   } catch (error) {
-    console.error('❌ [NOTIFICATION] Erreur:', error);
+    if (error instanceof AppError) throw error;
     throw error;
   }
 };
@@ -252,9 +251,7 @@ export const deleteNotification = async (notificationId: number): Promise<Delete
     console.log('📊 [NOTIFICATION] Statut de la réponse de suppression:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [NOTIFICATION] Erreur lors de la suppression de la notification:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la suppression de la notification');
+      return rejectNotification(response, 'Impossible de supprimer la notification.');
     }
     
     const data = await response.json();
@@ -262,7 +259,7 @@ export const deleteNotification = async (notificationId: number): Promise<Delete
     
     return data;
   } catch (error) {
-    console.error('❌ [NOTIFICATION] Erreur:', error);
+    if (error instanceof AppError) throw error;
     throw error;
   }
 };
@@ -290,9 +287,7 @@ export const deleteAllNotifications = async (): Promise<DeleteNotificationRespon
     console.log('📊 [NOTIFICATION] Statut de la réponse de suppression globale:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ [NOTIFICATION] Erreur lors de la suppression des notifications:', errorData.message);
-      throw new Error(errorData.message || 'Erreur lors de la suppression des notifications');
+      return rejectNotification(response, 'Impossible de supprimer les notifications.');
     }
     
     const data = await response.json();
@@ -300,7 +295,7 @@ export const deleteAllNotifications = async (): Promise<DeleteNotificationRespon
     
     return data;
   } catch (error) {
-    console.error('❌ [NOTIFICATION] Erreur:', error);
+    if (error instanceof AppError) throw error;
     throw error;
   }
 };

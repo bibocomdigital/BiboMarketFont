@@ -13,6 +13,7 @@ import { RealtimeProvider } from "@/presentation/providers/realtime-provider";
 import { GoogleAuthGate } from "@/presentation/providers/google-auth-gate";
 import { CartProvider } from "@/components/CartContext";
 import { ConfirmProvider } from "@/components/feedback/confirm-dialog";
+import { PendingCartSync } from "@/presentation/components/cart/PendingCartSync";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(makeQueryClient);
@@ -27,6 +28,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
             <RealtimeProvider>
               <TooltipProvider>
                 <ConfirmProvider>
+                  <PendingCartSync />
                   <Suspense fallback={null}>{children}</Suspense>
                   <SonnerToaster />
                   <Toaster />

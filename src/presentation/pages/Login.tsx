@@ -67,7 +67,7 @@ const Login = () => {
     >
       <div className="w-full">
         <div className="mb-8">
-          <BackButton />
+          <BackButton to="/" label="Retour à l'accueil" />
           <h2 className="auth-form-title text-bibocom-primary">Connexion</h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">
             Accédez à votre compte BibocomMarket

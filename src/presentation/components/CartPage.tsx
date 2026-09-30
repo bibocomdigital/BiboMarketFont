@@ -308,7 +308,7 @@ const CartPage = () => {
   };
   
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="py-2">
       {/* Toast de notification */}
       {toast && (
         <Toast 
@@ -318,7 +318,7 @@ const CartPage = () => {
         />
       )}
       
-      <div className="container mx-auto px-4">
+      <div className="w-full">
         {/* Titre et bouton retour */}
         <div className="flex items-center mb-8">
           <a 
@@ -380,7 +380,7 @@ const CartPage = () => {
           </div>
         ) : (
           // Panier avec articles
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 xl:gap-8">
             {/* Liste des articles */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">

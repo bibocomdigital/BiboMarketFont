@@ -36,6 +36,8 @@ services:
       - REDIS_URL=redis://redis:6379
     ports:
       - '3005:3000'
+    volumes:
+      - ../BiboMarketBack/uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy

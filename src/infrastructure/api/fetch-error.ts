@@ -1,5 +1,25 @@
 import { AppError, toAppError } from "@domain/errors/app-error";
 
+/** Message technique (pile, Prisma, HTML) : on garde le libellé prévu pour l'utilisateur. */
+function presentableMessage(
+  raw: string | undefined,
+  fallback: string,
+  status: number,
+): string {
+  if (!raw) return fallback;
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (!text) return fallback;
+  const technical =
+    /internal server error|prisma|exception|at \S+\(|<!doctype|<html|econn|syntaxerror|typeerror|cannot read propert/i.test(
+      text,
+    );
+  if (technical) return fallback;
+  if (text.length > 280) {
+    return status >= 500 ? fallback : `${text.slice(0, 277)}…`;
+  }
+  return text;
+}
+
 /**
  * Convertit une réponse HTTP en échec (Response non-ok) en AppError lisible.
  * Gère les corps JSON (objet ou array), les corps en texte brut et les corps vides,
@@ -43,9 +63,7 @@ export async function parseApiError(
     rawMessage = raw.filter(Boolean).map(String).join(", ");
   }
 
-  // Pour les 5xx (erreur serveur), on ne renvoie pas le détail brut vers l'UI :
-  // le message générique est plus lisible, le détail reste disponible dans `details`.
-  const message = status >= 500 ? fallback : rawMessage || fallback;
+  const message = presentableMessage(rawMessage, fallback, status);
   const mapped = toAppError(status, { ...body, message });
 
   return new AppError(mapped.message, mapped.code, status, body);

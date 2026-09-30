@@ -136,6 +136,7 @@ const ClientDashboard = () => {
           onOpenOrders={() => handleSectionChange("orders")}
           onOpenProducts={() => handleSectionChange("products")}
           onOpenProfile={() => navigate("/profile")}
+          onOpenOrder={(orderId) => navigate(`/commandes/${orderId}`)}
         />
       )}
       {section === "categories" && (

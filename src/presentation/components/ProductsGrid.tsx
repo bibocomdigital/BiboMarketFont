@@ -16,12 +16,14 @@ import { getUserErrorMessage } from '@domain/errors/app-error';
 import { Loader, Heart, MessageCircle, X, ChevronLeft, ChevronRight, ThumbsDown, Search, Play } from 'lucide-react';
 import { ServiceUnavailableState } from '@/components/feedback/ServiceUnavailableState';
 import { useAuthSession } from '@/hooks/use-auth-session';
+import { CartAuthDialog } from '@/presentation/components/cart/CartAuthDialog';
+import { flyToCart } from '@/presentation/lib/fly-to-cart';
 import { useSearchParams } from 'react-router-dom';
 import ProductDetailModal from '@/components/ProductDetailModal';
 import ProductMiniPlayer from '@/components/ProductMiniPlayer';
 import { VoirPlusButton } from '@/components/ui/voir-plus-button';
 
-const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) => {
+const ProductsGrid = ({ hideSearchBar = false, hideCategoryPills = false }: { hideSearchBar?: boolean; hideCategoryPills?: boolean }) => {
   const { isAuthenticated: isLoggedIn, user } = useAuthSession();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFromUrl = searchParams.get('category');
@@ -64,6 +66,7 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
   const [dislikesCount, setDislikesCount] = useState<{[key: number]: number}>({});
   
   const [cartMessages, setCartMessages] = useState<{[key: number]: boolean}>({});
+  const [authProduct, setAuthProduct] = useState<{ id: number; name: string } | null>(null);
   const [commentsCountByProduct, setCommentsCountByProduct] = useState<{[key: number]: number}>({});
   const [floatingVideo, setFloatingVideo] = useState<{ id: number; name: string; videoUrl: string } | null>(null);
 
@@ -81,14 +84,14 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
       event.stopPropagation();
     }
     
-    // Si l'utilisateur n'est pas connecté, rediriger vers la page de connexion
     if (!isLoggedIn) {
-      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+      setAuthProduct({ id: product.id, name: product.name });
       return;
     }
-    
+
+    flyToCart(event?.currentTarget, getImageUrl(product));
+
     try {
-      // Appeler le service pour ajouter au panier
       await addToCartMutation.mutateAsync({ productId: product.id });
       
       // Afficher le message de confirmation
@@ -607,9 +610,9 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className={hideSearchBar ? "" : "container mx-auto px-4 py-8"}>
       {/* Barre de navigation et filtres */}
-      <div className="mb-8">
+      <div className={hideSearchBar ? "mb-4" : "mb-8"}>
         {!hideSearchBar && (
         <div className="mb-6">
           <div className="relative">
@@ -627,69 +630,75 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
         </div>
         )}
 
-        {/* Filtres et bouton toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-            {/* Select pour les catégories */}
-            {categories.length > 0 && (
-              <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                <label className="text-sm font-medium text-gray-700">Catégorie:</label>
-                <select
-                  value={selectedCategory || ''}
-                  onChange={(e) => handleCategoryFilter(e.target.value ? parseInt(e.target.value) : undefined)}
-                  className="border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-w-[200px]"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 flex-1">
+            {!hideCategoryPills && categories.length > 0 && (
+              <div
+                className="flex gap-2 overflow-x-auto pb-1"
+                role="tablist"
+                aria-label="Catégories"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!selectedCategory}
+                  onClick={() => handleCategoryFilter(undefined)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    !selectedCategory
+                      ? "bg-bibocom-primary text-white"
+                      : "bg-white text-slate-600 ring-1 ring-slate-200 hover:text-bibocom-primary"
+                  }`}
                 >
-                  <option value="">Toutes les catégories</option>
-                  {categories.map((category, index) => (
-                    <option 
-                      key={category.id ? `category-${category.id}` : `category-unknown-${index}`} 
-                      value={category.id}
+                  Toutes
+                </button>
+                {categories.map((category, index) => {
+                  const selected = selectedCategory === category.id;
+                  return (
+                    <button
+                      key={category.id ? `category-${category.id}` : `category-unknown-${index}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => handleCategoryFilter(selected ? undefined : category.id)}
+                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                        selected
+                          ? "bg-bibocom-primary text-white"
+                          : "bg-white text-slate-600 ring-1 ring-slate-200 hover:text-bibocom-primary"
+                      }`}
                     >
                       {category.name}
-                    </option>
-                  ))}
-                </select>
+                    </button>
+                  );
+                })}
               </div>
             )}
             
-            {/* Indicateur des filtres actifs */}
-            {(selectedCategory || searchTerm) && (
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-500">Filtres actifs:</span>
-                {selectedCategory && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {categories.find(cat => cat.id === selectedCategory)?.name || 'Catégorie'}
-                    <button
-                      onClick={() => handleCategoryFilter(undefined)}
-                      className="ml-1 text-blue-600 hover:text-blue-800"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                )}
-                {searchTerm && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    "{searchTerm}"
-                    <button
-                      onClick={() => handleSearch('')}
-                      className="ml-1 text-green-600 hover:text-green-800"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                )}
+            {searchTerm ? (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-bibocom-accent">
+                  « {searchTerm} »
+                  <button
+                    type="button"
+                    onClick={() => handleSearch("")}
+                    className="ml-1"
+                    aria-label="Effacer la recherche"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
                 <button
+                  type="button"
                   onClick={resetFilters}
-                  className="text-sm text-red-600 hover:text-red-800 underline"
+                  className="text-xs font-medium text-slate-500 hover:text-bibocom-primary"
                 >
                   Tout effacer
                 </button>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Informations sur les résultats */}
-          <div className="text-sm text-gray-500">
+          <div className="shrink-0 text-sm text-slate-500">
             {loading ? (
               'Chargement...'
             ) : (
@@ -725,7 +734,7 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((product) => (
               <div 
                 key={`product-${product.id}`} 
@@ -733,7 +742,7 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
                 onClick={() => openModal(product)}
               >
                 {/* Product Image Carousel */}
-                <div className="relative h-48 overflow-hidden bg-gray-100">
+                <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                   {isPromoPrice(product.price, product.promoPrice) ? (
                     <span className="absolute left-2 top-2 z-10 rounded-full bg-bibocom-accent px-2 py-0.5 text-[11px] font-semibold text-white">
                       Promo
@@ -823,8 +832,13 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
                 {/* Product Details */}
                 <div className="p-4">
                   <h3 className="font-medium text-gray-800 mb-2 line-clamp-1">{product.name}</h3>
+                  {product.boostedUntil && new Date(product.boostedUntil).getTime() > Date.now() ? (
+                    <p className="mb-2 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-bibocom-accent">
+                      Boosté
+                    </p>
+                  ) : null}
                   <p className="text-gray-500 mb-3 text-sm line-clamp-2">{product.description}</p>
-                  <div className="flex justify-between items-center">
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                     <ProductPrice price={product.price} promoPrice={product.promoPrice} />
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center">
@@ -881,6 +895,13 @@ const ProductsGrid = ({ hideSearchBar = false }: { hideSearchBar?: boolean }) =>
           onClose={() => setFloatingVideo(null)}
         />
       )}
+      {authProduct ? (
+        <CartAuthDialog
+          productId={authProduct.id}
+          productName={authProduct.name}
+          onClose={() => setAuthProduct(null)}
+        />
+      ) : null}
       {isModalOpen && selectedProduct && (
         <ProductDetailModal
           product={selectedProduct}
