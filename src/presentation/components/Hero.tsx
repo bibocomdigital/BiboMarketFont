@@ -10,6 +10,7 @@ import {
   Dumbbell,
   Home,
   Laptop,
+  LayoutGrid,
   ShieldCheck,
   Shirt,
   Smartphone,
@@ -141,6 +142,15 @@ const Hero = () => {
     ? current.title
     : "Tout ce dont vous avez besoin, au meilleur prix !";
 
+  const showAllCategories = () => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.delete("category");
+      return params;
+    });
+    scrollToProducts();
+  };
+
   const selectCategory = (category: ProductCategory) => {
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
@@ -266,7 +276,24 @@ const Hero = () => {
       </div>
 
       {categories.length > 0 ? (
-        <ul className="mt-5 flex min-w-0 gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Catégories">
+        <ul className="mt-8 flex min-w-0 gap-3 overflow-x-auto pb-2 sm:mt-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Catégories">
+          <li className="shrink-0">
+            <button
+              type="button"
+              onClick={showAllCategories}
+              aria-pressed={!searchParams.get("category")}
+              className={`flex w-[7.25rem] flex-col items-center gap-2.5 rounded-2xl border px-3 py-3.5 text-center shadow-sm ${
+                !searchParams.get("category")
+                  ? "border-bibocom-accent bg-white shadow-md ring-2 ring-bibocom-accent/25"
+                  : "border-slate-200 bg-white hover:border-bibocom-accent/50 hover:shadow-md"
+              }`}
+            >
+              <span className={`flex h-12 w-12 items-center justify-center rounded-full ${!searchParams.get("category") ? "bg-bibocom-accent text-white" : "bg-orange-100 text-bibocom-accent"}`}>
+                <LayoutGrid size={22} />
+              </span>
+              <span className="line-clamp-2 text-sm font-semibold leading-tight text-bibocom-primary">Toutes</span>
+            </button>
+          </li>
           {categories.map((category) => {
             const Icon = iconForCategory(category.name);
             const selected = selectedCategory === category.id;
@@ -275,14 +302,17 @@ const Hero = () => {
                 <button
                   type="button"
                   onClick={() => selectCategory(category)}
-                  className={`flex w-[5.5rem] flex-col items-center gap-2 rounded-2xl px-2 py-3 text-center ${
-                    selected ? "bg-white shadow-md ring-2 ring-bibocom-accent" : "bg-white/80 hover:bg-white"
+                  aria-pressed={selected}
+                  className={`flex w-[7.25rem] flex-col items-center gap-2.5 rounded-2xl border px-3 py-3.5 text-center shadow-sm ${
+                    selected
+                      ? "border-bibocom-accent bg-white shadow-md ring-2 ring-bibocom-accent/25"
+                      : "border-slate-200 bg-white hover:border-bibocom-accent/50 hover:shadow-md"
                   }`}
                 >
-                  <span className={`flex h-11 w-11 items-center justify-center rounded-full ${selected ? "bg-bibocom-accent text-white" : "bg-orange-50 text-bibocom-accent"}`}>
-                    <Icon size={18} />
+                  <span className={`flex h-12 w-12 items-center justify-center rounded-full ${selected ? "bg-bibocom-accent text-white" : "bg-orange-100 text-bibocom-accent"}`}>
+                    <Icon size={22} />
                   </span>
-                  <span className="line-clamp-2 text-[11px] font-medium leading-tight text-bibocom-primary">{category.name}</span>
+                  <span className="line-clamp-2 text-sm font-semibold leading-tight text-bibocom-primary">{category.name}</span>
                 </button>
               </li>
             );
@@ -305,6 +335,25 @@ export function HomeCategoryCards() {
     <section className="min-w-0 py-4">
       <h2 className="text-xl font-semibold text-bibocom-primary">Nos catégories</h2>
       <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <li>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchParams((prev) => {
+                const params = new URLSearchParams(prev);
+                params.delete("category");
+                return params;
+              });
+              scrollToProducts();
+            }}
+            className="flex h-full w-full flex-col items-start gap-3 rounded-2xl border border-slate-200/80 bg-slate-50 p-4 text-left shadow-sm"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-bibocom-accent shadow-sm ring-1 ring-slate-200/70">
+              <LayoutGrid size={22} />
+            </span>
+            <span className="block text-base font-semibold text-bibocom-primary">Toutes</span>
+          </button>
+        </li>
         {categories.map((category, index) => {
           const Icon = iconForCategory(category.name);
           const count = category._count?.products;
@@ -320,15 +369,15 @@ export function HomeCategoryCards() {
                   });
                   scrollToProducts();
                 }}
-                className={`flex h-full w-full flex-col items-start gap-3 rounded-2xl p-4 text-left ${tones[index % tones.length]}`}
+                className={`flex h-full w-full flex-col items-start gap-3 rounded-2xl border border-slate-200/80 p-4 text-left shadow-sm ${tones[index % tones.length]}`}
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-bibocom-accent shadow-sm">
-                  <Icon size={18} />
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-bibocom-accent shadow-sm ring-1 ring-slate-200/70">
+                  <Icon size={22} />
                 </span>
                 <span>
-                  <span className="block text-sm font-semibold text-bibocom-primary">{category.name}</span>
+                  <span className="block text-base font-semibold text-bibocom-primary">{category.name}</span>
                   {typeof count === "number" ? (
-                    <span className="mt-0.5 block text-xs text-slate-500">{count} produit{count > 1 ? "s" : ""}</span>
+                    <span className="mt-1 block text-sm text-slate-600">{count} produit{count > 1 ? "s" : ""}</span>
                   ) : null}
                 </span>
               </button>

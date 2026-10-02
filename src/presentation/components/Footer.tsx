@@ -11,7 +11,7 @@ const Footer = () => {
           {/* Company Info */}
           <div className="md:col-span-1">
             <a href="/" className="mb-6 inline-flex" aria-label="Bibocom Market">
-              <img src="/images/logo.png" alt="Bibocom Market" className="h-10 w-auto max-w-[200px] rounded-lg bg-white object-contain" />
+              <img src="/images/logo.png" alt="Bibocom Market" className="h-10 w-auto max-w-[200px] bg-transparent object-contain" />
             </a>
             <p className="mb-6 text-white/80">
               La révolution du e-commerce au Sénégal. Connectez-vous, achetez, vendez et prospérez dans notre écosystème numérique.

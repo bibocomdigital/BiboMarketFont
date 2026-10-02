@@ -26,6 +26,7 @@ const Header = () => {
   const categoriesRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
   const [headerQuery, setHeaderQuery] = useState("");
+  const [photoFailed, setPhotoFailed] = useState(false);
   const withMenu =
     location.pathname === "/" ||
     ["/boutique", "/boutiques", "/stories", "/livraisons", "/about", "/contact", "/cart"].some(
@@ -134,6 +135,10 @@ const Header = () => {
     ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email
     : "";
   const photoUrl = getPhotoUrl(user?.photo);
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [photoUrl]);
 
   const navClass = (href: string, exact = false) => {
     const path = location.pathname;
@@ -393,14 +398,15 @@ const Header = () => {
                     className="flex items-center gap-2 rounded-full py-1 pr-2 pl-1 transition-colors hover:bg-bibocom-primary/5"
                     title="Tableau de bord"
                   >
-                    {photoUrl ? (
+                    {photoUrl && !photoFailed ? (
                       <img
                         src={photoUrl}
                         alt={displayName}
                         className="h-8 w-8 rounded-full object-cover"
+                        onError={() => setPhotoFailed(true)}
                       />
                     ) : (
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-bibocom-primary/10 text-bibocom-primary">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-bibocom-primary text-white" aria-hidden>
                         <User size={16} />
                       </span>
                     )}

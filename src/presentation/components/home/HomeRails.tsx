@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
   LayoutGrid,
@@ -63,6 +63,8 @@ export function HomeMenu({
   stacked?: boolean;
 }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const onHome = location.pathname === "/";
   const { isAuthenticated, user, dashboardPath } = useAuthSession();
   const { itemsCount } = useCart();
   const role = (user?.role || "").toUpperCase();
@@ -77,6 +79,22 @@ export function HomeMenu({
         ? "bg-bibocom-primary text-white shadow-sm"
         : "text-slate-600 hover:translate-x-0.5 hover:bg-orange-50 hover:text-bibocom-primary"
     }`;
+
+  const openProducts = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    onNavigate?.();
+    event.preventDefault();
+    if (!onHome) navigate("/#produits");
+    const started = Date.now();
+    const scroll = () => {
+      const target = document.getElementById("produits");
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (!onHome && Date.now() - started < 2000) window.setTimeout(scroll, 50);
+    };
+    window.setTimeout(scroll, onHome ? 0 : 50);
+  };
 
   const listClass = stacked
     ? "flex flex-col gap-1"
@@ -99,7 +117,7 @@ export function HomeMenu({
           );
         })}
         <li>
-          <a href="#produits" className={itemClass(false)} onClick={onNavigate}>
+          <a href="/#produits" className={itemClass(false)} onClick={openProducts}>
             <LayoutGrid size={16} />
             Produits
           </a>

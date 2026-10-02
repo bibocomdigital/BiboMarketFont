@@ -479,8 +479,8 @@ export function MerchantOverview({
       </div>
       </div>
 
-      <aside className="space-y-4">
-        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+      <aside className="min-w-0 space-y-3 xl:sticky xl:top-20 xl:z-20 xl:self-start">
+        <section className="rounded-[24px] bg-white p-4 shadow-[0_12px_40px_-24px_rgba(10,37,64,0.45)] ring-1 ring-slate-100">
           <div className="flex items-center gap-3">
             {shopLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -509,7 +509,7 @@ export function MerchantOverview({
           </button>
         </section>
 
-        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+        <section className="rounded-[24px] bg-white p-4 shadow-[0_12px_40px_-24px_rgba(10,37,64,0.45)] ring-1 ring-slate-100">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">Mes commandes</h3>
             <button type="button" onClick={() => onOpenSection("orders")} className="text-sm text-bibocom-accent">
@@ -532,7 +532,7 @@ export function MerchantOverview({
           </ul>
         </section>
 
-        <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+        <section className="rounded-[24px] bg-white p-4 shadow-[0_12px_40px_-24px_rgba(10,37,64,0.45)] ring-1 ring-slate-100">
           <h3 className="font-semibold">Raccourcis</h3>
           <div className="mt-3 grid gap-2">
             {(

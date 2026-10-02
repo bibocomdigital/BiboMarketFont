@@ -11,9 +11,9 @@ import {
   User,
   BadgeCheck,
   LogOut,
-  ChevronLeft,
   Menu,
   Search,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUnreadMessagesQuery } from "@/hooks/queries/use-messages-query";
@@ -98,11 +98,11 @@ function NavButton({
       title={title}
       aria-label={badge > 0 ? `${item.label}, ${badge} non lu${badge > 1 ? "s" : ""}` : item.label}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+        "flex w-full items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
         collapsed && "justify-center px-0",
         active
-          ? "bg-orange-50 text-bibocom-accent"
-          : "text-slate-600 hover:bg-slate-50 hover:text-bibocom-primary"
+          ? "bg-bibocom-primary text-white shadow-sm"
+          : "text-slate-600 hover:translate-x-0.5 hover:bg-orange-50 hover:text-bibocom-primary"
       )}
     >
       <span className="relative shrink-0">
@@ -124,61 +124,47 @@ function SidebarBody({
   section,
   onSectionChange,
   onLogout,
-  onToggleCollapsed,
-  showCollapse,
 }: {
   collapsed: boolean;
   section: MerchantSection;
   onSectionChange: (section: MerchantSection) => void;
   onLogout: () => void;
-  onToggleCollapsed?: () => void;
-  showCollapse?: boolean;
 }) {
   const { data: unreadCount = 0 } = useUnreadMessagesQuery();
+  const itemClass = cn(
+    "flex w-full items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:translate-x-0.5 hover:bg-orange-50 hover:text-bibocom-primary",
+    collapsed && "justify-center px-0"
+  );
   return (
-    <div className="flex h-full flex-col bg-white">
-      <div className={cn("flex items-center gap-2 px-4 py-4", collapsed ? "justify-center" : "justify-between")}>
-        {!collapsed && <AppLogo href={null} className="h-8 max-w-[150px]" />}
-        {showCollapse && onToggleCollapsed && (
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
-            aria-label={collapsed ? "Ouvrir le menu" : "Réduire le menu"}
-          >
-            <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
-          </button>
-        )}
-      </div>
-
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3">
+    <nav aria-label="Menu commerçant" className="rounded-[24px] bg-white p-3 shadow-[0_12px_40px_-24px_rgba(10,37,64,0.45)] ring-1 ring-slate-100">
+      {!collapsed ? (
+        <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Menu</p>
+      ) : null}
+      <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            active={section === item.id}
-            collapsed={collapsed}
-            badge={item.id === "messages" ? unreadCount : 0}
-            onClick={() => onSectionChange(item.id)}
-          />
+          <li key={item.id}>
+            <NavButton
+              item={item}
+              active={section === item.id}
+              collapsed={collapsed}
+              badge={item.id === "messages" ? unreadCount : 0}
+              onClick={() => onSectionChange(item.id)}
+            />
+          </li>
         ))}
-      </nav>
-
-      <div className="mt-auto border-t border-slate-100 px-3 py-4">
-        <button
-          type="button"
-          onClick={onLogout}
-          title={collapsed ? "Déconnexion" : undefined}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-500 hover:bg-slate-50 hover:text-bibocom-primary",
-            collapsed && "justify-center px-0"
-          )}
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>Déconnexion</span>}
-        </button>
-      </div>
-    </div>
+      </ul>
+      {!collapsed ? (
+        <p className="mt-3 px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Options</p>
+      ) : null}
+      <ul className="mt-1 flex flex-col gap-1">
+        <li>
+          <button type="button" onClick={onLogout} title={collapsed ? "Déconnexion" : undefined} className={itemClass}>
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!collapsed ? <span>Déconnexion</span> : null}
+          </button>
+        </li>
+      </ul>
+    </nav>
   );
 }
 
@@ -186,7 +172,6 @@ export function MerchantShell({
   section,
   onSectionChange,
   collapsed,
-  onToggleCollapsed,
   mobileOpen,
   onMobileOpenChange,
   displayName,
@@ -206,22 +191,6 @@ export function MerchantShell({
         isMessages ? "h-dvh overflow-hidden" : "min-h-screen"
       )}
     >
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden border-r border-slate-200 bg-white transition-[width] duration-200 md:block",
-          collapsed ? "w-[72px]" : "w-[230px]"
-        )}
-      >
-        <SidebarBody
-          collapsed={collapsed}
-          section={section}
-          onSectionChange={onSectionChange}
-          onLogout={onLogout}
-          onToggleCollapsed={onToggleCollapsed}
-          showCollapse
-        />
-      </aside>
-
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <button
@@ -230,28 +199,35 @@ export function MerchantShell({
             aria-label="Fermer le menu"
             onClick={() => onMobileOpenChange(false)}
           />
-          <aside className="relative z-50 h-full w-[240px] border-r border-slate-200 bg-white shadow-2xl">
-            <SidebarBody
-              collapsed={false}
-              section={section}
-              onSectionChange={(next) => {
-                onSectionChange(next);
-                onMobileOpenChange(false);
-              }}
-              onLogout={onLogout}
-            />
-          </aside>
+          <div className="relative flex h-full w-[min(100%,20rem)] max-w-full flex-col bg-[#f6f7fb] shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3">
+              <p className="text-base font-semibold text-bibocom-primary">Menu</p>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-bibocom-primary ring-1 ring-slate-200"
+                onClick={() => onMobileOpenChange(false)}
+                aria-label="Fermer le menu"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6">
+              <SidebarBody
+                collapsed={false}
+                section={section}
+                onSectionChange={(next) => {
+                  onSectionChange(next);
+                  onMobileOpenChange(false);
+                }}
+                onLogout={onLogout}
+              />
+            </div>
+          </div>
         </div>
       )}
 
-      <div
-        className={cn(
-          "flex flex-col transition-[padding] duration-200",
-          collapsed ? "md:pl-[72px]" : "md:pl-[230px]",
-          isMessages ? "h-full min-h-0" : "min-h-screen"
-        )}
-      >
-        <header className="sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+      <div className={cn("flex min-h-dvh flex-col", isMessages && "h-dvh overflow-hidden")}>
+        <header className="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-4">
           <button
             type="button"
             className="flex h-10 w-10 items-center justify-center rounded-xl text-bibocom-primary ring-1 ring-slate-200 md:hidden"
@@ -260,7 +236,7 @@ export function MerchantShell({
           >
             <Menu className="h-5 w-5" />
           </button>
-          <AppLogo className="h-8 max-w-[140px] md:hidden" />
+          <AppLogo className="h-8 max-w-[120px] shrink-0" />
           <p className="hidden text-sm font-semibold text-bibocom-primary lg:block">{TITLES[section]}</p>
           <form
             className="relative min-w-0 flex-1"
@@ -289,7 +265,7 @@ export function MerchantShell({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={photoUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
               ) : (
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-bibocom-accent">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-bibocom-primary text-white">
                   <User className="h-4 w-4" />
                 </span>
               )}
@@ -302,15 +278,29 @@ export function MerchantShell({
             </button>
           </div>
         </header>
-        <main
+        <div
           className={cn(
-            isMessages
-              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-              : "flex-1 px-4 py-5 sm:px-6"
+            "grid min-w-0 flex-1 gap-3 px-3 py-3 md:grid-cols-[280px_minmax(0,1fr)] md:items-start",
+            isMessages && "min-h-0"
           )}
         >
-          {children}
-        </main>
+          <aside className="hidden self-start md:sticky md:top-20 md:z-20 md:block">
+            <SidebarBody
+              collapsed={collapsed}
+              section={section}
+              onSectionChange={onSectionChange}
+              onLogout={onLogout}
+            />
+          </aside>
+          <main
+            className={cn(
+              "min-w-0",
+              isMessages ? "flex min-h-0 flex-col overflow-hidden" : "pb-6"
+            )}
+          >
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );
